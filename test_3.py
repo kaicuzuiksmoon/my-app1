@@ -16,9 +16,9 @@ def load_data():
       - Drop rows where Actual or Final is NaN
       - Extract numeric part of Week (W1 -> 1) as Week_num
     """
-    # csv_path = "/Users/ksmoon/2024 12월 보고서 자동화/steamlit/dashboard1/score.csv"
-    # df = pd.read_csv(csv_path)
-    df = pd.read_csv("score.csv")
+    # You may need to adjust this path according to your GitHub/Streamlit structure
+    csv_path = "score.csv"
+    df = pd.read_csv(csv_path)
 
     # Extract only numbers, '.' or '-' from Actual
     df['Actual'] = (
@@ -36,7 +36,6 @@ def load_data():
     df['Week_num'] = df['Week'].str.extract(r'(\d+)').astype(int)
 
     return df
-
 
 # ----------------------------------------------------
 # 1) Load data
@@ -61,7 +60,7 @@ selected_week_or_total = st.sidebar.selectbox("Select Week (or 'Total')", option
 selected_team = st.sidebar.selectbox("Select a Team", options=all_teams)
 
 # ----------------------------------------------------
-# 4) Pivot - Final (sum) & Actual (mean)
+# 4) Pivot - Final (sum) & Actual (mean) for selected_kpi
 # ----------------------------------------------------
 df_kpi_final = df[df['KPI'] == selected_kpi].copy()
 grouped_final = df_kpi_final.groupby(['Week','Team'], as_index=False)['Final'].sum()
@@ -74,23 +73,21 @@ pivot_act = grouped_act.pivot(index='Team', columns='Week', values='Actual').fil
 pivot_act['Average'] = pivot_act.mean(axis=1)
 
 # ----------------------------------------------------
-# 5) Layout: 9 rows
-# ----------------------------------------------------
-
 # Row1: "Target : ... best score : ... No. 1 team : ..."
+# ----------------------------------------------------
 st.subheader("Row1: Max Score Info")
 if pivot_final.empty:
     st.write("No Final data.")
 else:
-    # Max total and corresponding team
     max_total = pivot_final['Total'].max()
     max_team = pivot_final['Total'].idxmax()
-    # Display in the requested format
     st.markdown(f"""Target : {selected_kpi}  
 best score : {max_total:.2f}  
 No. 1 team : {max_team}""")
 
+# ----------------------------------------------------
 # Row2: Final Score chart
+# ----------------------------------------------------
 st.subheader("Row2: Final Score Chart")
 if pivot_final.empty or (selected_week_or_total not in pivot_final.columns):
     st.write("No data for this chart.")
@@ -109,14 +106,18 @@ else:
     )
     st.altair_chart(chart_final, use_container_width=False)
 
+# ----------------------------------------------------
 # Row3: Final table
+# ----------------------------------------------------
 st.subheader("Row3: Final Table")
 if pivot_final.empty:
     st.write("No Final data.")
 else:
     st.dataframe(pivot_final.style.format(precision=2))
 
+# ----------------------------------------------------
 # Row4: Actual chart
+# ----------------------------------------------------
 st.subheader("Row4: Actual Chart")
 actual_col = selected_week_or_total
 if actual_col == "Total":
@@ -138,14 +139,18 @@ else:
     )
     st.altair_chart(chart_act, use_container_width=False)
 
+# ----------------------------------------------------
 # Row5: Actual table
+# ----------------------------------------------------
 st.subheader("Row5: Actual Table")
 if pivot_act.empty:
     st.write("No Actual data.")
 else:
     st.dataframe(pivot_act.style.format(precision=2))
 
-# Row6: Rank chart (using selected_team from sidebar)
+# ----------------------------------------------------
+# Row6: Rank chart (using selected_team)
+# ----------------------------------------------------
 st.subheader("Row6: Rank Chart")
 df_rank = df.copy()
 df_rank['Rank'] = df_rank.groupby(['Week','KPI'])['Final'].rank(method='dense', ascending=False)
@@ -159,7 +164,7 @@ else:
         alt.Chart(df_team_rank)
         .mark_line(point=True)
         .encode(
-            x=alt.X('Week_num:Q', axis=alt.Axis(title='Week_num')),
+            x=alt.X('Week_num:Q', axis=alt.Axis(title='Weeknum')),
             y=alt.Y('Rank:Q', sort='descending', axis=alt.Axis(title='Rank (1=best)')),
             color=alt.Color('KPI:N', legend=alt.Legend(title='KPI')),
             tooltip=['Week','KPI','Final','Rank']
@@ -168,7 +173,9 @@ else:
     )
     st.altair_chart(line_chart, use_container_width=False)
 
+# ----------------------------------------------------
 # Row7: Rank table
+# ----------------------------------------------------
 st.subheader("Row7: Rank Table")
 if df_team_rank.empty:
     st.write("No Rank data.")
@@ -177,18 +184,18 @@ else:
     rank_pivot['Total'] = rank_pivot.sum(axis=1)
     st.dataframe(rank_pivot.fillna("").style.format(precision=2))
 
+# ----------------------------------------------------
 # Row8: Radar chart (selected_team vs. overall max)
+# ----------------------------------------------------
 st.subheader("Row8: Radar Chart")
 if df_team_rank.empty:
     st.write("No data for Radar Chart.")
 else:
     df_final_only = df.copy()
-    # This team's average Final
     team_mean = (df_final_only[df_final_only['Team'] == selected_team]
                  .groupby('KPI')['Final'].mean()
                  .rename('Team_Mean')
                  .reset_index())
-    # Overall max
     max_final = (df_final_only.groupby('KPI')['Final'].max()
                  .rename('Max_Final')
                  .reset_index())
@@ -222,7 +229,9 @@ else:
         )
         st.plotly_chart(fig, use_container_width=False)
 
+# ----------------------------------------------------
 # Row9: The team's Actual table
+# ----------------------------------------------------
 st.subheader("Row9: The Team's Actual Table")
 df_team_act = df[df['Team'] == selected_team].copy()
 if df_team_act.empty:
@@ -230,6 +239,47 @@ if df_team_act.empty:
 else:
     team_act_pivot = df_team_act.pivot(index='KPI', columns='Week', values='Actual')
     st.dataframe(team_act_pivot.fillna("").style.format(precision=2))
+
+# ----------------------------------------------------
+# Row10: Overall Summation Chart (all KPI)
+# ----------------------------------------------------
+st.subheader("Row10: Overall Summation Chart")
+df_total_all_kpi = df.groupby(['Week','Team'], as_index=False)['Final'].sum()
+
+if df_total_all_kpi.empty:
+    st.write("No overall data.")
+else:
+    chart_overall = (
+        alt.Chart(df_total_all_kpi)
+        .mark_bar()
+        .encode(
+            x=alt.X('Team:N', sort='-y'),
+            y=alt.Y('Final:Q', stack='zero'),
+            color='Week:N',
+            tooltip=['Team', 'Week', 'Final']
+        )
+        .properties(width=700, height=400)
+    )
+    st.altair_chart(chart_overall, use_container_width=False)
+
+# ----------------------------------------------------
+# Row11: Overall Summation Table & Ranking
+# ----------------------------------------------------
+st.subheader("Row11: Overall Summation Table")
+if df_total_all_kpi.empty:
+    st.write("No overall data.")
+else:
+    pivot_total_all = df_total_all_kpi.pivot(index='Team', columns='Week', values='Final').fillna(0)
+    pivot_total_all['GrandTotal'] = pivot_total_all.sum(axis=1)
+
+    st.write("Overall Summation Table (all KPI, all weeks)")
+    st.dataframe(pivot_total_all.style.format(precision=2))
+
+    # Sort descending by GrandTotal
+    ranking_df = pivot_total_all[['GrandTotal']].copy()
+    ranking_df = ranking_df.sort_values('GrandTotal', ascending=False)
+    ranking_df['Rank'] = ranking_df['GrandTotal'].rank(method='dense', ascending=False).astype(int)
+    st.dataframe(ranking_df.style.format(precision=2))
 
 st.write("---")
 st.write("End of layout version 1 by HWK QIP.")
