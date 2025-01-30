@@ -16,8 +16,9 @@ def load_data():
       - Drop rows where Actual or Final is NaN
       - Extract numeric part of Week (W1 -> 1) as Week_num
     """
-    csv_path = "/Users/ksmoon/2024 12월 보고서 자동화/steamlit/dashboard1/score.csv"
-    df = pd.read_csv(csv_path)
+    # csv_path = "/Users/ksmoon/2024 12월 보고서 자동화/steamlit/dashboard1/score.csv"
+    # df = pd.read_csv(csv_path)
+    df = pd.read_csv("score.csv")
 
     # Extract only numbers, '.' or '-' from Actual
     df['Actual'] = (
