@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 import re
+import os
 
 # 페이지 설정: 타이틀 및 와이드 레이아웃
 st.set_page_config(page_title="KPI Dashboard", layout="wide")
@@ -58,7 +59,7 @@ week_min = int(df["Week_num"].min())
 week_max = int(df["Week_num"].max())
 selected_week_range = st.sidebar.slider("Select Week Range", min_value=week_min, max_value=week_max, value=(week_min, week_max))
 
-# 4. 팀 상세 조회용: 단일 팀 선택 (별도 위젯)
+# 4. 팀 상세 조회용: 단일 팀 선택
 selected_team_detail = st.sidebar.selectbox("Select Team for Details", team_list)
 
 # ------------------------------------------
@@ -96,7 +97,7 @@ fig_bar = px.bar(
     labels={"Actual_numeric": f"Average {selected_kpi} Value"},
     title=f"Average {selected_kpi} by Team"
 )
-st.plotly_chart(fig_bar, use_container_width=True)
+st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 
 # -----------------------------------------------------
 # 2. 주간 성과 트렌드 분석 (라인 차트)
@@ -111,7 +112,7 @@ fig_line = px.line(
     labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
     title=f"Weekly Trend of {selected_kpi}"
 )
-st.plotly_chart(fig_line, use_container_width=True)
+st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 
 # -----------------------------------------------------
 # 3. KPI별 상위/하위 팀 랭킹 (수평 바 차트)
@@ -140,7 +141,7 @@ with col1:
         labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
     )
     fig_top.update_layout(yaxis={'categoryorder': 'total ascending'})
-    st.plotly_chart(fig_top, use_container_width=True)
+    st.plotly_chart(fig_top, use_container_width=True, key="top_chart")
 with col2:
     st.subheader(f"Bottom {bottom_n} Teams - {selected_kpi}")
     fig_bottom = px.bar(
@@ -152,7 +153,7 @@ with col2:
         labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
     )
     fig_bottom.update_layout(yaxis={'categoryorder': 'total ascending'})
-    st.plotly_chart(fig_bottom, use_container_width=True)
+    st.plotly_chart(fig_bottom, use_container_width=True, key="bottom_chart")
 
 # -----------------------------------------------------
 # 4. 특정 팀의 KPI 상세 조회 기능
@@ -171,7 +172,7 @@ previous_data = df_team[df_team["Week_num"] == (latest_week - 1)]
 
 st.subheader(f"Details for {selected_team_detail} (Week {latest_week})")
 # KPI별 최신 값과 전주 대비 변화(Delta)를 st.metric으로 표시
-cols = st.columns(3)  # 한 행에 3개씩 표시 (필요시 행 수 자동 전환)
+cols = st.columns(3)  # 한 행에 3개씩 표시
 i = 0
 for index, row in latest_data.iterrows():
     kpi_name = row["KPI"]
