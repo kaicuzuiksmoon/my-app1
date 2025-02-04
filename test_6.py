@@ -98,6 +98,22 @@ with col_lang:
 st.title(trans["title"][lang])
 
 # --------------------------------------------------
+# 2-1. 하단에 작은 폰트 CSS (Last Week / Total Week 섹션 전용)
+# --------------------------------------------------
+st.markdown(
+    """
+    <style>
+    .small-metric [data-testid="stMetricValue"] {
+        font-size: 16px;
+    }
+    .small-metric [data-testid="stMetricDelta"] {
+        font-size: 12px;
+    }
+    </style>
+    """, unsafe_allow_html=True
+)
+
+# --------------------------------------------------
 # 3. 유틸리티 함수 정의
 # --------------------------------------------------
 @st.cache_data
@@ -320,6 +336,8 @@ else:
 
 # --- (A) Last Week performance Details ---
 st.markdown(trans["last_week_details"][lang].format(team=selected_team_detail, week=latest_week))
+# 영역에 작은 폰트 적용 (small-metric)
+st.markdown('<div class="small-metric">', unsafe_allow_html=True)
 if selected_team_detail != "HWK Total":
     df_last = df_team[df_team["Week_num"] == latest_week]
     df_prev = df_team[df_team["Week_num"] == (latest_week - 1)]
@@ -332,7 +350,6 @@ else:
         "Final": "mean",
         "Actual": "first"
     }).reset_index()
-
 cols = st.columns(3)
 i = 0
 for kpi in df_last["KPI"].unique():
@@ -343,15 +360,10 @@ for kpi in df_last["KPI"].unique():
         row_last = df_last[df_last["KPI"] == kpi].iloc[0]
         prev_rows = df_prev[df_prev["KPI"] == kpi]
     current_label = format_label(row_last)
-    # delta 계산 시 Final 값이 NaN이 아닌지 확인
     if not prev_rows.empty:
         row_prev = prev_rows.iloc[0]
-        if pd.notna(row_last["Actual_numeric"]) and pd.notna(row_prev["Actual_numeric"]):
-            delta_actual = row_last["Actual_numeric"] - row_prev["Actual_numeric"]
-        else:
-            delta_actual = None
+        delta_actual = row_last["Actual_numeric"] - row_prev["Actual_numeric"] if pd.notna(row_last["Actual_numeric"]) and pd.notna(row_prev["Actual_numeric"]) else None
         if pd.notna(row_last["Final"]) and pd.notna(row_prev["Final"]):
-            # 소수점 반올림 후 정수형 변환
             delta_final = int(round(row_last["Final"])) - int(round(row_prev["Final"]))
         else:
             delta_final = None
@@ -366,10 +378,12 @@ for kpi in df_last["KPI"].unique():
         delta_str = "N/A"
     cols[i % 3].metric(label=kpi, value=current_label, delta=delta_str)
     i += 1
+st.markdown('</div>', unsafe_allow_html=True)
 
 # --- (B) Total Week Performance Detail (누적 실적) ---
 st.markdown("")
 st.markdown(trans["total_week_details"][lang].format(team=selected_team_detail))
+st.markdown('<div class="small-metric">', unsafe_allow_html=True)
 if selected_team_detail != "HWK Total":
     df_cum = df[(df["Team"] == selected_team_detail) & 
                 (df["Week_num"] >= selected_week_range[0]) & 
@@ -392,6 +406,7 @@ for kpi in df_cum_group["KPI"].unique():
     delta_cum_str = f"{arrow_cum}{delta_cum:+.2f} point" if top_cum != 0 else ""
     cols_total[i % 3].metric(label=kpi, value=f"{cum_value:.2f}", delta=delta_cum_str)
     i += 1
+st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------
 # 11. [5] Detailed Data Table (행: 7 KPI, 열: 1주차/2주차/3주차/평균)
@@ -414,8 +429,12 @@ for kpi in kpi_all:
         if not sub_df.empty:
             val = sub_df.iloc[0]["Actual_numeric"]
             final_val = sub_df.iloc[0]["Final"]
-            unit = extract_unit(sub_df.iloc[0]["Actual"])
-            formatted = f"{val:.2f}{unit} ({final_val} point)"
+            # shortage_cost의 경우 수치 앞에 $ 추가
+            if kpi.lower() == "shortage_cost":
+                formatted = f"${val:.2f} ({final_val} point)"
+            else:
+                unit = extract_unit(sub_df.iloc[0]["Actual"])
+                formatted = f"{val:.2f}{unit} ({final_val} point)"
             row_data[f"Week {w}"] = formatted
             values.append(val)
             finals.append(final_val)
