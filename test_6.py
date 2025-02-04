@@ -98,22 +98,6 @@ with col_lang:
 st.title(trans["title"][lang])
 
 # --------------------------------------------------
-# 2-1. 하단에 작은 폰트 CSS (Last Week / Total Week 섹션 전용)
-# --------------------------------------------------
-st.markdown(
-    """
-    <style>
-    .small-metric [data-testid="stMetricValue"] {
-        font-size: 16px;
-    }
-    .small-metric [data-testid="stMetricDelta"] {
-        font-size: 12px;
-    }
-    </style>
-    """, unsafe_allow_html=True
-)
-
-# --------------------------------------------------
 # 3. 유틸리티 함수 정의
 # --------------------------------------------------
 @st.cache_data
@@ -164,6 +148,42 @@ def cumulative_performance(sub_df, kpi):
     else:
         return sub_df["Actual_numeric"].mean()
 
+def get_delta_color(kpi, delta):
+    """
+    KPI별로 개선(좋은 결과)는 파란색, 악화(나쁜 결과)는 빨간색으로 반환
+    - "prs validation", "6S_audit": 수치가 클수록 품질이 좋음 → delta > 0 이면 개선(blue)
+    - "AQL_performance", "B-grade", "attendance", "issue_tracking", "shortage_cost": 수치가 작을수록 품질이 좋음 → delta < 0 이면 개선(blue)
+    """
+    if delta is None:
+        return "black"
+    kpi_lower = kpi.lower()
+    positive_better = ["prs validation", "6s_audit"]
+    negative_better = ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]
+    if kpi_lower in positive_better:
+        return "blue" if delta > 0 else "red" if delta < 0 else "black"
+    elif kpi_lower in negative_better:
+        return "blue" if delta < 0 else "red" if delta > 0 else "black"
+    else:
+        return "blue" if delta > 0 else "red" if delta < 0 else "black"
+
+def render_custom_metric(col, label, value, delta, delta_color):
+    """
+    col: Streamlit 컬럼 객체
+    label: KPI명
+    value: 현재 성과 문자열 (예: "12.34% (10 point)")
+    delta: 변화량 문자열 (예: "▲+1.23%(+2 point)")
+    delta_color: 델타 문자열의 색상
+    폰트 크기는 12px로 작게 표시
+    """
+    html_metric = f"""
+    <div style="font-size:12px; margin:5px; padding:5px;">
+      <div style="font-weight:bold;">{label}</div>
+      <div>{value}</div>
+      <div style="color:{delta_color};">{delta}</div>
+    </div>
+    """
+    col.markdown(html_metric, unsafe_allow_html=True)
+
 # --------------------------------------------------
 # 4. 데이터 로드 및 전처리
 # --------------------------------------------------
@@ -211,7 +231,7 @@ else:
 # 최신주 데이터 (df_latest): 여기서는 팀별(원래 데이터에 있는) 데이터만 포함
 df_latest = df_filtered[df_filtered["Week_num"] == latest_week].copy()
 
-# 만약 비교용 팀에 "HWK Total"이 포함되어 있다면 전체 팀(팀 필터 미적용) 데이터로 전체 평균 행 생성
+# 만약 비교용 팀에 "HWK Total"이 포함되어 있다면 전체 평균 행 생성
 if "HWK Total" in selected_teams:
     df_overall = df_filtered[df_filtered["Week_num"] == latest_week].copy()
     if not df_overall.empty:
@@ -243,7 +263,8 @@ fig_bar = px.bar(
     text="Label",
     labels={"Actual_numeric": trans["avg_by_team"][lang].format(kpi=selected_kpi)}
 )
-fig_bar.update_traces(texttemplate="%{text}", textposition='outside')
+# ★ 수정사항 1: Top/Bottom 차트와 동일하게 막대 내부에 라벨 표기 (textposition='inside')
+fig_bar.update_traces(texttemplate="%{text}", textposition='inside')
 st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 
 # --------------------------------------------------
@@ -261,7 +282,6 @@ fig_line = px.line(
     labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
     title=trans["weekly_trend_title"][lang].format(kpi=selected_kpi)
 )
-# x축을 정수만 표시하도록 업데이트
 fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
 # HWK Total이 선택되면, 전체 팀 평균 per week를 검은색 점선으로 추가
 if "HWK Total" in selected_teams:
@@ -286,6 +306,7 @@ top_n = 3 if len(df_rank) >= 3 else len(df_rank)
 bottom_n = 3 if len(df_rank) >= 3 else len(df_rank)
 top_df = df_rank.head(top_n).copy()
 bottom_df = df_rank.tail(bottom_n).copy().sort_values("Actual_numeric", ascending=True)
+# ★ 수정사항 1: Top/Bottom 차트의 라벨을 막대 내부에 표기
 top_df["Label"] = top_df.apply(format_label, axis=1)
 bottom_df["Label"] = bottom_df.apply(format_label, axis=1)
 col1, col2 = st.columns(2)
@@ -299,7 +320,7 @@ with col1:
         text="Label",
         labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
     )
-    fig_top.update_traces(texttemplate="%{text}", textposition='outside')
+    fig_top.update_traces(texttemplate="%{text}", textposition='inside')
     fig_top.update_layout(yaxis={'categoryorder': 'total ascending'})
     st.plotly_chart(fig_top, use_container_width=True, key="top_chart")
 with col2:
@@ -312,7 +333,7 @@ with col2:
         text="Label",
         labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
     )
-    fig_bottom.update_traces(texttemplate="%{text}", textposition='outside', marker_color='red')
+    fig_bottom.update_traces(texttemplate="%{text}", textposition='inside', marker_color='red')
     fig_bottom.update_layout(yaxis={'categoryorder': 'total ascending'})
     st.plotly_chart(fig_bottom, use_container_width=True, key="bottom_chart")
 
@@ -336,54 +357,57 @@ else:
 
 # --- (A) Last Week performance Details ---
 st.markdown(trans["last_week_details"][lang].format(team=selected_team_detail, week=latest_week))
-# 영역에 작은 폰트 적용 (small-metric)
-st.markdown('<div class="small-metric">', unsafe_allow_html=True)
-if selected_team_detail != "HWK Total":
-    df_last = df_team[df_team["Week_num"] == latest_week]
-    df_prev = df_team[df_team["Week_num"] == (latest_week - 1)]
-else:
-    # 그룹화된 경우: KPI별 평균을 이미 구했으므로 사용 (Week 정보가 없으므로 그대로 사용)
-    df_last = df_team.copy()
-    # 지난주 데이터: 그룹화하여 KPI별 평균 계산
-    df_prev = df[df["Week_num"] == (latest_week - 1)].groupby("KPI").agg({
-        "Actual_numeric": "mean",
-        "Final": "mean",
-        "Actual": "first"
-    }).reset_index()
 cols = st.columns(3)
 i = 0
-for kpi in df_last["KPI"].unique():
+for kpi in df_team["KPI"].unique():
+    # 선택된 팀(또는 그룹화된 경우)의 최신주 데이터
     if selected_team_detail != "HWK Total":
-        row_last = df_last[df_last["KPI"] == kpi].iloc[0]
-        prev_rows = df_prev[df_prev["KPI"] == kpi]
+        df_last = df_team[df_team["Week_num"] == latest_week]
+        df_prev = df_team[df_team["Week_num"] == (latest_week - 1)]
     else:
+        df_last = df_team.copy()
+        df_prev = df[df["Week_num"] == (latest_week - 1)].groupby("KPI").agg({
+            "Actual_numeric": "mean",
+            "Final": "mean",
+            "Actual": "first"
+        }).reset_index()
+    if not df_last[df_last["KPI"] == kpi].empty:
         row_last = df_last[df_last["KPI"] == kpi].iloc[0]
-        prev_rows = df_prev[df_prev["KPI"] == kpi]
+    else:
+        continue
     current_label = format_label(row_last)
-    if not prev_rows.empty:
-        row_prev = prev_rows.iloc[0]
-        delta_actual = row_last["Actual_numeric"] - row_prev["Actual_numeric"] if pd.notna(row_last["Actual_numeric"]) and pd.notna(row_prev["Actual_numeric"]) else None
+    # delta 계산
+    if not df_prev[df_prev["KPI"] == kpi].empty:
+        row_prev = df_prev[df_prev["KPI"] == kpi].iloc[0]
+        if pd.notna(row_last["Actual_numeric"]) and pd.notna(row_prev["Actual_numeric"]):
+            delta_actual = row_last["Actual_numeric"] - row_prev["Actual_numeric"]
+        else:
+            delta_actual = None
         if pd.notna(row_last["Final"]) and pd.notna(row_prev["Final"]):
             delta_final = int(round(row_last["Final"])) - int(round(row_prev["Final"]))
         else:
             delta_final = None
-        arrow = ""
-        if delta_actual is not None:
-            arrow = "▲" if delta_actual > 0 else "▼" if delta_actual < 0 else ""
         if delta_actual is not None and delta_final is not None:
+            # KPI별 arrow 결정 (prs validation, 6S_audit: 높은 수치가 좋고, 그 외는 낮은 수치가 좋음)
+            kpi_lower = kpi.lower()
+            positive_better = ["prs validation", "6s_audit"]
+            if kpi_lower in positive_better:
+                arrow = "▲" if delta_actual > 0 else "▼" if delta_actual < 0 else ""
+            else:
+                arrow = "▲" if delta_actual < 0 else "▼" if delta_actual > 0 else ""
             delta_str = f"{arrow}{delta_actual:+.2f}%({delta_final:+d} point)"
         else:
             delta_str = "N/A"
     else:
         delta_str = "N/A"
-    cols[i % 3].metric(label=kpi, value=current_label, delta=delta_str)
+        delta_actual = None
+    delta_color = get_delta_color(kpi, delta_actual)
+    render_custom_metric(cols[i % 3], kpi, current_label, delta_str, delta_color)
     i += 1
-st.markdown('</div>', unsafe_allow_html=True)
 
 # --- (B) Total Week Performance Detail (누적 실적) ---
 st.markdown("")
 st.markdown(trans["total_week_details"][lang].format(team=selected_team_detail))
-st.markdown('<div class="small-metric">', unsafe_allow_html=True)
 if selected_team_detail != "HWK Total":
     df_cum = df[(df["Team"] == selected_team_detail) & 
                 (df["Week_num"] >= selected_week_range[0]) & 
@@ -397,16 +421,29 @@ i = 0
 for kpi in df_cum_group["KPI"].unique():
     sub_df = df_cum[df_cum["KPI"] == kpi]
     cum_value = cumulative_performance(sub_df, kpi)
+    # 전체 팀별 누적 성과 계산 (비교용)
     team_cum = df[(df["KPI"] == kpi) & 
                   (df["Week_num"] >= selected_week_range[0]) & 
                   (df["Week_num"] <= selected_week_range[1])].groupby("Team").apply(lambda x: cumulative_performance(x, kpi)).reset_index(name="cum")
-    top_cum = team_cum["cum"].max() if not team_cum.empty else 0
-    delta_cum = cum_value - top_cum
-    arrow_cum = "▲" if delta_cum > 0 else "▼" if delta_cum < 0 else ""
-    delta_cum_str = f"{arrow_cum}{delta_cum:+.2f} point" if top_cum != 0 else ""
-    cols_total[i % 3].metric(label=kpi, value=f"{cum_value:.2f}", delta=delta_cum_str)
+    kpi_lower = kpi.lower()
+    positive_better = ["prs validation", "6s_audit"]
+    negative_better = ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]
+    if kpi_lower in positive_better:
+        best_value = team_cum["cum"].max() if not team_cum.empty else 0
+        delta = cum_value - best_value
+        arrow = "▲" if delta > 0 else "▼" if delta < 0 else ""
+    elif kpi_lower in negative_better:
+        best_value = team_cum["cum"].min() if not team_cum.empty else 0
+        delta = cum_value - best_value
+        arrow = "▲" if delta < 0 else "▼" if delta > 0 else ""
+    else:
+        best_value = team_cum["cum"].max() if not team_cum.empty else 0
+        delta = cum_value - best_value
+        arrow = "▲" if delta > 0 else "▼" if delta < 0 else ""
+    delta_str = f"{arrow}{abs(delta):+.2f} point" if best_value != 0 else ""
+    delta_color = get_delta_color(kpi, delta)
+    render_custom_metric(cols_total[i % 3], kpi, f"{cum_value:.2f}", delta_str, delta_color)
     i += 1
-st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------
 # 11. [5] Detailed Data Table (행: 7 KPI, 열: 1주차/2주차/3주차/평균)
@@ -429,12 +466,8 @@ for kpi in kpi_all:
         if not sub_df.empty:
             val = sub_df.iloc[0]["Actual_numeric"]
             final_val = sub_df.iloc[0]["Final"]
-            # shortage_cost의 경우 수치 앞에 $ 추가
-            if kpi.lower() == "shortage_cost":
-                formatted = f"${val:.2f} ({final_val} point)"
-            else:
-                unit = extract_unit(sub_df.iloc[0]["Actual"])
-                formatted = f"{val:.2f}{unit} ({final_val} point)"
+            unit = extract_unit(sub_df.iloc[0]["Actual"])
+            formatted = f"{val:.2f}{unit} ({final_val} point)"
             row_data[f"Week {w}"] = formatted
             values.append(val)
             finals.append(final_val)
