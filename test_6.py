@@ -16,8 +16,7 @@ def load_data():
       - Drop rows where Actual or Final is NaN
       - Extract numeric part of Week (W1 -> 1) as Week_num
     """
-    # CSV 파일 경로를 필요에 맞게 조정하세요.
-    csv_path = "score.csv"
+    csv_path = "score.csv"  # 코드 파일과 동일한 위치에 있어야 함
     df = pd.read_csv(csv_path)
 
     # Actual 컬럼에서 숫자, '.', '-' 외의 문자를 제거
@@ -66,7 +65,7 @@ grouped_final = df_kpi_final.groupby(['Week', 'Team'], as_index=False)['Final'].
 pivot_final = grouped_final.pivot(index='Team', columns='Week', values='Final').fillna(0)
 pivot_final['Total'] = pivot_final.sum(axis=1)
 
-# Actual 데이터 집계
+# Actual 데이터 집계 (선택 KPI에 대해 mean 사용)
 df_kpi_act = df[df['KPI'] == selected_kpi].copy()
 grouped_act = df_kpi_act.groupby(['Week', 'Team'], as_index=False)['Actual'].mean()
 pivot_act = grouped_act.pivot(index='Team', columns='Week', values='Actual').fillna(0)
@@ -116,7 +115,7 @@ else:
     st.dataframe(pivot_final.style.format(precision=2))
 
 # ----------------------------------------------------
-# Row4: Actual Chart
+# Row4: Actual Chart (선택 KPI, 선택 주차)
 # ----------------------------------------------------
 st.subheader("Row4: Actual Chart")
 actual_col = selected_week_or_total
@@ -140,7 +139,7 @@ else:
     st.altair_chart(chart_act, use_container_width=False)
 
 # ----------------------------------------------------
-# Row5: Actual Table
+# Row5: Actual Table (선택 KPI)
 # ----------------------------------------------------
 st.subheader("Row5: Actual Table")
 if pivot_act.empty:
@@ -285,9 +284,9 @@ st.write("---")
 st.write("End of layout version 1 by HWK QIP.")
 
 # ----------------------------------------------------
-# Row12: KPI별 주차별 점수 및 HWK Total (팀별 점수와 전체 평균)
+# Row12: KPI별 주차별 점수 (Final) & HWK Total (팀별 점수와 전체 평균)
 # ----------------------------------------------------
-st.subheader("Row12: KPI별 주차별 점수 & HWK Total (팀별 점수와 전체 평균)")
+st.subheader("Row12: KPI별 주차별 점수 (Final) & HWK Total (팀별 점수와 전체 평균)")
 
 # x축에 사용할 순서 (unique_weeks + HWK Total)
 period_order = unique_weeks + ["HWK Total"]
@@ -302,24 +301,20 @@ for kpi in all_kpis:
         st.write("해당 KPI에 대한 데이터가 없습니다.")
         continue
 
-    # 팀별, 주차별 Final 점수 합계를 구함
+    # 팀별, 주차별 Final 점수 합계 집계
     pivot = df_kpi.groupby(['Team', 'Week'])['Final'].sum().unstack(fill_value=0)
-    
-    # 모든 주차(unique_weeks)가 컬럼에 포함되도록 재정렬 (없으면 0으로 채움)
     pivot = pivot.reindex(unique_weeks, axis=1, fill_value=0)
-    
-    # 각 팀별로 "HWK Total" 열 추가 (모든 주차의 합계)
     pivot["HWK Total"] = pivot.sum(axis=1)
     
-    # 팀별 피벗 테이블에 모든 팀 평균 행("Average") 추가
+    # 모든 팀의 평균 행("Average") 추가
     pivot_with_avg = pivot.copy()
     pivot_with_avg.loc["Average"] = pivot_with_avg.mean(axis=0)
     
-    # [테이블] 결과 출력 (소수점 2자리)
+    # 테이블 출력 (소수점 2자리)
     st.dataframe(pivot_with_avg.style.format(precision=2))
     
-    # [차트] 팀별 점수를 시각화하기 위해 피벗 테이블(평균행 제외)을 long format으로 변환
-    pivot_reset = pivot.reset_index()  # 'Team'이 컬럼이 되도록 변환
+    # 차트 생성을 위해 long format으로 변환
+    pivot_reset = pivot.reset_index()
     df_melted = pd.melt(
         pivot_reset,
         id_vars="Team",
@@ -328,12 +323,12 @@ for kpi in all_kpis:
         value_name="Score"
     )
     
-    # 각 Period(주차, HWK Total)의 전체 평균 계산
+    # Period별 전체 평균 계산
     avg_series = pivot.mean(axis=0)
     average_df = avg_series.reset_index()
     average_df.columns = ["Period", "Average_Score"]
     
-    # Altair 차트 생성: 팀별 막대 차트 + 전체 평균 선 및 점 표시
+    # Altair 차트 생성: 팀별 막대 + 전체 평균 선/포인트
     base = alt.Chart(df_melted).mark_bar().encode(
         x=alt.X('Period:N', sort=period_order, title="주차 / HWK Total"),
         y=alt.Y('Score:Q', title="Final 점수"),
@@ -354,3 +349,66 @@ for kpi in all_kpis:
     chart = (base + average_line + average_points).properties(width=700, height=400)
     st.altair_chart(chart, use_container_width=False)
 
+# ----------------------------------------------------
+# Row13: KPI별 주차별 실적 (Actual) & HWK Total (팀별 실적과 전체 평균)
+# ----------------------------------------------------
+st.subheader("Row13: KPI별 주차별 실적 (Actual) & HWK Total (팀별 실적과 전체 평균)")
+
+# 모든 KPI에 대해 반복 처리 (period_order는 위와 동일하게 사용)
+for kpi in all_kpis:
+    st.markdown(f"### KPI: {kpi}")
+    
+    # KPI별 데이터 필터링
+    df_kpi = df[df['KPI'] == kpi].copy()
+    if df_kpi.empty:
+        st.write("해당 KPI에 대한 데이터가 없습니다.")
+        continue
+
+    # 팀별, 주차별 Actual 점수 집계
+    # 여기서는 Final과 유사하게 sum을 사용 (필요시 mean 등으로 조정 가능)
+    pivot_act2 = df_kpi.groupby(['Team', 'Week'])['Actual'].sum().unstack(fill_value=0)
+    pivot_act2 = pivot_act2.reindex(unique_weeks, axis=1, fill_value=0)
+    pivot_act2["HWK Total"] = pivot_act2.sum(axis=1)
+    
+    # 모든 팀 평균 행("Average") 추가
+    pivot_act2_with_avg = pivot_act2.copy()
+    pivot_act2_with_avg.loc["Average"] = pivot_act2_with_avg.mean(axis=0)
+    
+    # 테이블 출력 (소수점 2자리)
+    st.dataframe(pivot_act2_with_avg.style.format(precision=2))
+    
+    # 차트 생성을 위해 long format으로 변환
+    pivot_reset_act = pivot_act2.reset_index()
+    df_melted_act = pd.melt(
+        pivot_reset_act,
+        id_vars="Team",
+        value_vars=period_order,
+        var_name="Period",
+        value_name="Score"
+    )
+    
+    # Period별 전체 평균 계산
+    avg_series_act = pivot_act2.mean(axis=0)
+    average_df_act = avg_series_act.reset_index()
+    average_df_act.columns = ["Period", "Average_Score"]
+    
+    # Altair 차트 생성: 팀별 막대 + 전체 평균 선/포인트
+    base_act = alt.Chart(df_melted_act).mark_bar().encode(
+        x=alt.X('Period:N', sort=period_order, title="주차 / HWK Total"),
+        y=alt.Y('Score:Q', title="Actual 점수"),
+        color=alt.Color('Team:N', title="팀"),
+        tooltip=['Team', 'Period', 'Score']
+    )
+    
+    average_line_act = alt.Chart(average_df_act).mark_line(color='black', strokeWidth=3).encode(
+        x=alt.X('Period:N', sort=period_order),
+        y=alt.Y('Average_Score:Q', title="전체 평균")
+    )
+    
+    average_points_act = alt.Chart(average_df_act).mark_point(color='black', size=100).encode(
+        x=alt.X('Period:N', sort=period_order),
+        y=alt.Y('Average_Score:Q')
+    )
+    
+    chart_act2 = (base_act + average_line_act + average_points_act).properties(width=700, height=400)
+    st.altair_chart(chart_act2, use_container_width=False)
