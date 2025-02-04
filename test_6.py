@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import numpy as np
 import re
 import os
@@ -201,10 +200,17 @@ else:
                      (df["Week_num"] >= selected_week_range[0]) & 
                      (df["Week_num"] <= selected_week_range[1])].copy()
 
-if not df_filtered.empty:
-    latest_week = int(df_filtered["Week_num"].max())
+# 선택된 KPI가 Final score가 아닌 경우 최신 주차를 기준으로 상세정보에 활용
+if selected_kpi != "Final score":
+    if not df_filtered.empty:
+        latest_week = int(df_filtered["Week_num"].max())
+    else:
+        latest_week = None
 else:
-    latest_week = None
+    if not df_filtered.empty:
+        latest_week = int(df_filtered["Week_num"].max())
+    else:
+        latest_week = None
 
 # --------------------------------------------------
 # 7. [1] KPI Performance Comparison by Team (바 차트)
@@ -271,45 +277,30 @@ st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 # --------------------------------------------------
 st.markdown(trans["weekly_trend"][lang])
 if selected_kpi == "Final score":
-    # 각 팀별 누적 Final 점수를 계산(주차별 cumsum)
+    # 각 팀별로 주차순 정렬 후 누적 합계(cumsum) 계산
     df_trend_individual = df_filtered.sort_values("Week_num").groupby("Team").apply(
         lambda x: x.assign(CumFinal=x["Final"].cumsum())
     ).reset_index(drop=True)
-    
-    # 마지막 주(선택된 주차 범위의 최대 주차)의 누적 점수를 기준으로 팀 정렬
-    teams_order = df_trend_individual[df_trend_individual["Week_num"] == selected_week_range[1]] \
-                    .sort_values("CumFinal", ascending=False)["Team"].tolist()
-    
-    # 미리 색상, 선 스타일, 마커 설정 (최대 7팀 기준; 팀 수에 따라 반복됨)
-    colors = ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', '#ffd92f', '#e5c494']
-    line_dashes = ['solid', 'dash', 'dot', 'dashdot', 'solid', 'dash', 'dot']
-    marker_symbols = ['circle', 'square', 'triangle-up', 'diamond', 'triangle-down', 'cross', 'x']
-    
-    fig_line = go.Figure()
-    for i, team in enumerate(teams_order):
-        team_data = df_trend_individual[df_trend_individual["Team"] == team]
-        fig_line.add_trace(go.Scatter(
-            x = team_data["Week_num"],
-            y = team_data["CumFinal"],
-            mode = 'lines+markers+text',
-            name = team,
-            text = [f"{y:.0f}" for y in team_data["CumFinal"]],
-            textposition = 'top center',
-            line = dict(color = colors[i % len(colors)], dash = line_dashes[i % len(line_dashes)]),
-            marker = dict(symbol = marker_symbols[i % len(marker_symbols)], size = 8, color = colors[i % len(colors)])
-        ))
-    
-    # 레이아웃 설정: 그리드, 축 범위, 제목, 범례를 오른쪽에 배치
-    fig_line.update_layout(
-        title = {'text': "Weekly Trend of Final score (Cumulative)", 'x':0.5, 'xanchor': 'center', 'font': {'size': 13}},
-        xaxis_title = "Week",
-        yaxis_title = "Cumulative Final Score",
-        xaxis = dict(dtick=1, range=[selected_week_range[0]-0.5, selected_week_range[1]+0.5], showgrid=True, gridcolor='LightGray', gridwidth=1),
-        yaxis = dict(range=[0, df_trend_individual["CumFinal"].max()*1.1], showgrid=True, gridcolor='LightGray', gridwidth=1),
-        legend = dict(title="Team", x=1.05, y=1),
-        margin = dict(r=150)
+    fig_line = px.line(
+        df_trend_individual,
+        x="Week_num",
+        y="CumFinal",
+        color="Team",
+        markers=True,
+        labels={"Week_num": "Week", "CumFinal": "Cumulative Final score"},
+        title="Weekly Trend of Final score (Cumulative)"
     )
-    st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
+    fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
+    if "HWK Total" in selected_teams:
+        df_overall_trend = df_filtered.sort_values("Week_num").groupby("Week_num").agg({"Final": "sum"}).reset_index()
+        df_overall_trend["CumFinal"] = df_overall_trend["Final"].cumsum()
+        fig_line.add_scatter(
+            x=df_overall_trend["Week_num"],
+            y=df_overall_trend["CumFinal"],
+            mode='lines+markers',
+            name="HWK Total",
+            line=dict(color='black', dash='dash')
+        )
 else:
     df_trend_individual = df_filtered[df_filtered["Team"].isin([t for t in selected_teams if t != "HWK Total"])].copy()
     fig_line = px.line(
@@ -331,7 +322,7 @@ else:
             name="HWK Total",
             line=dict(color='black', dash='dash')
         )
-    st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
+st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 
 # --------------------------------------------------
 # 9. [3] KPI Top/Bottom Team Rankings (Top 3 / Bottom 3)
@@ -525,6 +516,7 @@ for kpi in kpi_all:
             val = sub_df.iloc[0]["Actual_numeric"]
             final_val = sub_df.iloc[0]["Final"]
             unit = extract_unit(sub_df.iloc[0]["Actual"])
+            # 괄호 부분에 <br> 태그를 추가해 2줄로 표기
             formatted = f"{val:.2f}{unit}<br>({final_val} point)"
             row_data[f"Week {w}"] = formatted
             values.append(val)
