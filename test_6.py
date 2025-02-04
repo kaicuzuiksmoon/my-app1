@@ -243,12 +243,12 @@ else:
 
 # 최신주 데이터 (df_latest)
 if selected_kpi == "Final score":
-    # 각 팀별 해당 주의 Final score(7개 항목의 합계) 계산
+    # Final score의 경우, 각 팀별 해당 주의 Final score(7개 항목의 합계)를 계산
     df_latest = df_filtered[df_filtered["Week_num"] == latest_week].groupby("Team").agg({"Final": "sum"}).reset_index()
     df_latest["Label"] = df_latest.apply(format_final_label, axis=1)
-    # 만약 비교용 팀에 "HWK Total"이 포함되어 있다면, 전체 팀의 평균 값 행 생성
+    # "HWK Total" 선택 시 전체 팀의 누적 합계로 계산 (평균이 아닌 누적 합계)
     if "HWK Total" in selected_teams:
-        overall_final = df_latest["Final"].mean()
+        overall_final = df_latest["Final"].sum()
         df_total = pd.DataFrame({
             "Team": ["HWK Total"],
             "Final": [overall_final]
@@ -309,7 +309,7 @@ st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 # --------------------------------------------------
 st.markdown(trans["weekly_trend"][lang])
 if selected_kpi == "Final score":
-    # Final score인 경우, 각 팀/주차별로 Final 값(합계)을 계산
+    # Final score인 경우, 각 팀/주차별로 Final 값(누적 합계)을 계산
     df_trend_individual = df_filtered.groupby(["Team", "Week_num"]).agg({"Final": "sum"}).reset_index()
     fig_line = px.line(
         df_trend_individual,
@@ -322,7 +322,7 @@ if selected_kpi == "Final score":
     )
     fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
     if "HWK Total" in selected_teams:
-        # HWK Total: 전체 팀의 주차별 평균 Final score 계산
+        # HWK Total: 전체 팀의 주차별 누적 합계 Final score 계산
         df_overall_trend = df_filtered.groupby("Week_num").agg({"Final": "sum"}).reset_index()
         fig_line.add_scatter(
             x=df_overall_trend["Week_num"],
@@ -439,7 +439,10 @@ else:
     }).reset_index()
 
 # --- (A) Last Week performance Details ---
-st.markdown(trans["last_week_details"][lang].format(team=selected_team_detail, week=latest_week))
+st.markdown(
+    f"<div style='font-size:18px; font-weight:bold;'>{trans['last_week_details'][lang].format(team=selected_team_detail, week=latest_week)}</div>",
+    unsafe_allow_html=True
+)
 cols = st.columns(3)
 i = 0
 for kpi in df_team["KPI"].unique():
@@ -488,7 +491,10 @@ for kpi in df_team["KPI"].unique():
 
 # --- (B) Total Week Performance Detail (누적 실적) ---
 st.markdown("")
-st.markdown(trans["total_week_details"][lang].format(team=selected_team_detail))
+st.markdown(
+    f"<div style='font-size:18px; font-weight:bold;'>{trans['total_week_details'][lang].format(team=selected_team_detail)}</div>",
+    unsafe_allow_html=True
+)
 if selected_team_detail != "HWK Total":
     df_cum = df[(df["Team"] == selected_team_detail) & 
                 (df["Week_num"] >= selected_week_range[0]) & 
@@ -550,7 +556,8 @@ for kpi in kpi_all:
             val = sub_df.iloc[0]["Actual_numeric"]
             final_val = sub_df.iloc[0]["Final"]
             unit = extract_unit(sub_df.iloc[0]["Actual"])
-            formatted = f"{val:.2f}{unit} ({final_val} point)"
+            # 괄호 부분을 줄바꿈하여 2줄로 표기
+            formatted = f"{val:.2f}{unit}<br>({final_val} point)"
             row_data[f"Week {w}"] = formatted
             values.append(val)
             finals.append(final_val)
@@ -559,7 +566,7 @@ for kpi in kpi_all:
     if values:
         avg_val = sum(values) / len(values)
         avg_final = sum(finals) / len(finals) if finals else 0
-        row_data["Average"] = f"{avg_val:.2f}{unit} ({avg_final:.2f} point)"
+        row_data["Average"] = f"{avg_val:.2f}{unit}<br>({avg_final:.2f} point)"
     else:
         row_data["Average"] = "N/A"
     data_table[kpi] = row_data
@@ -580,4 +587,5 @@ for idx in table_df.index:
     else:
         new_index[idx] = idx
 table_df.rename(index=new_index, inplace=True)
-st.dataframe(table_df)
+# HTML 태그(<br>)가 포함되어 있으므로 st.dataframe 대신 st.markdown으로 HTML 테이블 렌더링
+st.markdown(table_df.to_html(escape=False), unsafe_allow_html=True)
