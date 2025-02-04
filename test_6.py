@@ -152,10 +152,13 @@ def cumulative_performance(sub_df, kpi):
 # 4. 데이터 로드 및 전처리
 # --------------------------------------------------
 df = load_data()
+
 # Week 컬럼에서 숫자만 추출하여 Week_num 컬럼 생성 (예: "W1" -> 1)
 df["Week_num"] = df["Week"].apply(lambda x: int(re.sub(r'\D', '', x)) if isinstance(x, str) and re.sub(r'\D', '', x) != '' else np.nan)
 # Actual 값을 numeric으로 변환
 df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
+# Final 컬럼을 숫자형으로 변환 (에러 발생 방지를 위해)
+df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
 # --------------------------------------------------
 # 5. 사이드바 위젯 (필터)
@@ -242,8 +245,8 @@ fig_line = px.line(
     labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
     title=trans["weekly_trend_title"][lang].format(kpi=selected_kpi)
 )
-# x축을 정수만 표시하도록 업데이트
-fig_line.update_xaxes(tickmode='linear', dtick=1)
+# x축을 정수만 표시하도록 업데이트 (tickmode 'linear'로 설정)
+fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
 # HWK Total이 선택되면, 전체 팀 평균 per week를 검은색 점선으로 추가
 if "HWK Total" in selected_teams:
     df_overall_trend = df_filtered.groupby("Week_num").agg({"Actual_numeric": "mean", "Final": "mean"}).reset_index()
@@ -318,15 +321,13 @@ for idx, row in df_last.iterrows():
     if not prev_row.empty:
         prev_row = prev_row.iloc[0]
         delta_actual = row["Actual_numeric"] - prev_row["Actual_numeric"]
-        delta_final = row["Final"] - prev_row["Final"]
+        delta_final = int(row["Final"]) - int(prev_row["Final"])
         arrow = "▲" if delta_actual > 0 else "▼" if delta_actual < 0 else ""
         # delta는 소수점 2자리 (Actual)와 정수 (Final)
-        delta_str = f"{arrow}{delta_actual:+.2f}%({delta_final:+d} point)"
+        delta_str = f"({arrow}{delta_actual:+.2f}%({delta_final:+d} point))"
     else:
         delta_str = ""
-    st.markdown(f"**{row['KPI']}**: {current_label}")
-    if delta_str:
-        st.markdown(f"<span style='font-size:90%; color:gray;'>{delta_str}</span>", unsafe_allow_html=True)
+    st.markdown(f"**{row['KPI']}**: {current_label} {delta_str}")
 
 # --- (B) Total Week Performance Detail (누적 실적) ---
 st.markdown("")
@@ -346,17 +347,17 @@ if selected_team_detail != "HWK Total":
     top_cum = team_cum["cum"].max()
     delta_cum = cum_value - top_cum
     arrow_cum = "▲" if delta_cum > 0 else "▼" if delta_cum < 0 else ""
-    delta_cum_str = f"{arrow_cum}{delta_cum:+.2f} point" if top_cum != 0 else ""
+    delta_cum_str = f"({arrow_cum}{delta_cum:+.2f} point)" if top_cum != 0 else ""
 else:
     delta_cum_str = ""
-st.markdown(f"**{selected_kpi} Cumulative:** {cum_value:.2f}" + (f" ({delta_cum_str})" if delta_cum_str else ""))
+st.markdown(f"**{selected_kpi} Cumulative:** {cum_value:.2f}" + (f" {delta_cum_str}" if delta_cum_str else ""))
 
 # --------------------------------------------------
 # 11. [5] Detailed Data Table (행: 7 KPI, 열: 1주차/2주차/3주차/평균)
 # --------------------------------------------------
 st.markdown("")
 st.markdown(trans["detailed_data"][lang])
-# 모든 KPI 목록 (예: CSV에 있는 7개 KPI)
+# 모든 KPI 목록 (예: CSV에 있는 KPI 목록)
 kpi_all = sorted(df["KPI"].unique())
 weeks_to_show = [1, 2, 3]  # 1주차, 2주차, 3주차
 data_table = {}
@@ -399,4 +400,3 @@ for col in table_df.columns:
         new_cols[col] = trans["average"][lang]
 table_df.rename(columns=new_cols, inplace=True)
 st.dataframe(table_df)
-
