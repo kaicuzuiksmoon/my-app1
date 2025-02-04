@@ -399,3 +399,4 @@ for col in table_df.columns:
         new_cols[col] = trans["average"][lang]
 table_df.rename(columns=new_cols, inplace=True)
 st.dataframe(table_df)
+
