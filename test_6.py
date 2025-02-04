@@ -91,10 +91,9 @@ trans = {
 # --------------------------------------------------
 col_title, col_lang = st.columns([4, 1])
 with col_lang:
-    # st.radio의 옵션은 "en" 또는 "ko"로 설정 (기본: 영어)
     lang = st.radio("Language / 언어", options=["en", "ko"], index=0, horizontal=True)
 
-# 제목 출력 (언어에 따라)
+# 제목 출력 (선택한 언어)
 st.title(trans["title"][lang])
 
 # --------------------------------------------------
@@ -131,8 +130,8 @@ def extract_unit(s):
 
 def format_label(row):
     """
-    한 행(row)의 Actual_numeric 값과 Final 값을 소수점 2자리와 함께
-    "value{unit} (Final point)" 형식으로 반환
+    한 행(row)의 Actual_numeric 값과 Final 값을 소수점 2자리로 포맷하여
+    "value{unit} (Final point)" 형식의 문자열로 반환
     """
     unit = extract_unit(row["Actual"]) if pd.notnull(row["Actual"]) else ""
     return f"{row['Actual_numeric']:.2f}{unit} ({row['Final']} point)"
@@ -148,17 +147,25 @@ def cumulative_performance(sub_df, kpi):
     else:
         return sub_df["Actual_numeric"].mean()
 
+# KPI별 "좋은 값" 기준 (True이면 값이 클수록 좋은 것)
+better_when_higher = {
+    "5 prs validation": True,
+    "6S_audit": True,
+    "AQL_performance": False,
+    "B-grade": True,
+    "attendance": True,
+    "issue_tracking": True,
+    "shortage_cost": True
+}
+
 # --------------------------------------------------
 # 4. 데이터 로드 및 전처리
 # --------------------------------------------------
 df = load_data()
-
 # Week 컬럼에서 숫자만 추출하여 Week_num 컬럼 생성 (예: "W1" -> 1)
 df["Week_num"] = df["Week"].apply(lambda x: int(re.sub(r'\D', '', x)) if isinstance(x, str) and re.sub(r'\D', '', x) != '' else np.nan)
 # Actual 값을 numeric으로 변환
 df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
-# Final 컬럼을 숫자형으로 변환 (에러 발생 방지를 위해)
-df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
 # --------------------------------------------------
 # 5. 사이드바 위젯 (필터)
@@ -192,10 +199,10 @@ if not df_filtered.empty:
 else:
     latest_week = None
 
-# 최신주 데이터 (df_latest): 여기서는 팀별(원래 데이터에 있는) 데이터만 포함
+# 최신주 데이터 (df_latest): 팀별 데이터만 포함 (추후 HWK Total 추가)
 df_latest = df_filtered[df_filtered["Week_num"] == latest_week].copy()
 
-# 만약 비교용 팀에 "HWK Total"이 포함되어 있다면 전체 팀(팀 필터 미적용) 데이터로 전체 평균 행 생성
+# 만약 비교용 팀에 "HWK Total"이 포함되어 있다면, 전체 팀(팀 필터 미적용) 데이터로 평균 행 생성
 if "HWK Total" in selected_teams:
     df_overall = df_filtered[df_filtered["Week_num"] == latest_week].copy()
     if not df_overall.empty:
@@ -245,8 +252,8 @@ fig_line = px.line(
     labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
     title=trans["weekly_trend_title"][lang].format(kpi=selected_kpi)
 )
-# x축을 정수만 표시하도록 업데이트 (tickmode 'linear'로 설정)
-fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
+# x축을 정수만 표시하도록 (tick 간격 1)
+fig_line.update_xaxes(tickmode='linear', dtick=1)
 # HWK Total이 선택되면, 전체 팀 평균 per week를 검은색 점선으로 추가
 if "HWK Total" in selected_teams:
     df_overall_trend = df_filtered.groupby("Week_num").agg({"Actual_numeric": "mean", "Final": "mean"}).reset_index()
@@ -263,13 +270,19 @@ st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 # 9. [3] KPI Top/Bottom Team Rankings (Top 3 / Bottom 3)
 # --------------------------------------------------
 st.markdown(trans["top_bottom_rankings"][lang])
-# 랭킹은 "HWK Total" 제외
+# 순위 선정 시, "HWK Total"은 제외
 df_rank = df_comp[df_comp["Team"] != "HWK Total"].copy()
-df_rank = df_rank.sort_values("Actual_numeric", ascending=False)
-top_n = 3 if len(df_rank) >= 3 else len(df_rank)
-bottom_n = 3 if len(df_rank) >= 3 else len(df_rank)
-top_df = df_rank.head(top_n).copy()
-bottom_df = df_rank.tail(bottom_n).copy().sort_values("Actual_numeric", ascending=True)
+# KPI별 좋은 값 기준에 따라 정렬 (AQL_performance는 낮은 값이 좋음)
+if better_when_higher.get(selected_kpi, True):
+    df_rank_sorted_top = df_rank.sort_values("Actual_numeric", ascending=False)
+    df_rank_sorted_bottom = df_rank.sort_values("Actual_numeric", ascending=True)
+else:
+    df_rank_sorted_top = df_rank.sort_values("Actual_numeric", ascending=True)
+    df_rank_sorted_bottom = df_rank.sort_values("Actual_numeric", ascending=False)
+top_n = 3 if len(df_rank_sorted_top) >= 3 else len(df_rank_sorted_top)
+bottom_n = 3 if len(df_rank_sorted_bottom) >= 3 else len(df_rank_sorted_bottom)
+top_df = df_rank_sorted_top.head(top_n).copy()
+bottom_df = df_rank_sorted_bottom.head(bottom_n).copy()
 top_df["Label"] = top_df.apply(format_label, axis=1)
 bottom_df["Label"] = bottom_df.apply(format_label, axis=1)
 col1, col2 = st.columns(2)
@@ -296,6 +309,7 @@ with col2:
         text="Label",
         labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
     )
+    # 하위 차트는 빨간색으로 표기
     fig_bottom.update_traces(texttemplate="%{text}", textposition='outside', marker_color='red')
     fig_bottom.update_layout(yaxis={'categoryorder': 'total ascending'})
     st.plotly_chart(fig_bottom, use_container_width=True, key="bottom_chart")
@@ -304,60 +318,82 @@ with col2:
 # 10. [4] Team-Specific KPI Detailed View
 # --------------------------------------------------
 st.markdown("")
-# --- (A) Last Week performance Details ---
-if selected_team_detail != "HWK Total":
-    df_team = df[(df["KPI"] == selected_kpi) & (df["Team"] == selected_team_detail)].copy()
-else:
-    # HWK Total: 전체 팀 데이터(최신주)로 평균 계산
-    df_team = df[(df["KPI"] == selected_kpi) & (df["Week_num"] == latest_week)].copy()
-df_last = df_team[df_team["Week_num"] == latest_week].copy()
-df_prev = df_team[df_team["Week_num"] == (latest_week - 1)].copy()
 
+# --- (A) Last Week performance Details ---
 st.markdown(trans["last_week_details"][lang].format(team=selected_team_detail, week=latest_week))
-# 각 KPI에 대해 현재 값과 지난주 대비 delta 계산
-for idx, row in df_last.iterrows():
-    current_label = format_label(row)  # 예: "4.26%(7 point)"
-    prev_row = df_prev[df_prev["KPI"] == row["KPI"]]
-    if not prev_row.empty:
-        prev_row = prev_row.iloc[0]
-        delta_actual = row["Actual_numeric"] - prev_row["Actual_numeric"]
-        delta_final = int(row["Final"]) - int(prev_row["Final"])
-        arrow = "▲" if delta_actual > 0 else "▼" if delta_actual < 0 else ""
-        # delta는 소수점 2자리 (Actual)와 정수 (Final)
-        delta_str = f"({arrow}{delta_actual:+.2f}%({delta_final:+d} point))"
-    else:
-        delta_str = ""
-    st.markdown(f"**{row['KPI']}**: {current_label} {delta_str}")
+if selected_team_detail != "HWK Total":
+    # 개별 팀인 경우: 해당 팀의 selected_kpi 최신주와 전주 데이터
+    df_detail_last = df[(df["KPI"] == selected_kpi) & (df["Team"] == selected_team_detail) & (df["Week_num"] == latest_week)].copy()
+    df_detail_prev = df[(df["KPI"] == selected_kpi) & (df["Team"] == selected_team_detail) & (df["Week_num"] == (latest_week - 1))].copy()
+    if not df_detail_last.empty:
+        row = df_detail_last.iloc[0]
+        current_unit = extract_unit(row["Actual"])
+        current_value = row["Actual_numeric"]
+        current_final = row["Final"]
+        current_label = f"{current_value:.2f}{current_unit} ({current_final} point)"
+        if not df_detail_prev.empty:
+            prev_row = df_detail_prev.iloc[0]
+            delta_actual = current_value - prev_row["Actual_numeric"]
+            delta_final = current_final - prev_row["Final"]
+            arrow = "▲" if delta_actual > 0 else "▼" if delta_actual < 0 else ""
+            delta_str = f"{arrow}{delta_actual:+.2f}{current_unit} ({delta_final:+d} point)"
+        else:
+            delta_str = ""
+        st.markdown(f"**{selected_kpi}**: {current_label}")
+        if delta_str:
+            st.markdown(f"<span style='font-size:90%; color:gray;'>{delta_str}</span>", unsafe_allow_html=True)
+else:
+    # HWK Total인 경우: 전체 팀의 최신주와 전주의 평균 데이터 (선택 KPI)
+    df_overall_last = df[(df["KPI"] == selected_kpi) & (df["Week_num"] == latest_week)].copy()
+    df_overall_prev = df[(df["KPI"] == selected_kpi) & (df["Week_num"] == (latest_week - 1))].copy()
+    if not df_overall_last.empty:
+        current_value = df_overall_last["Actual_numeric"].mean()
+        current_final = round(df_overall_last["Final"].mean())
+        # unit은 첫 행의 것을 사용
+        current_unit = extract_unit(df_overall_last.iloc[0]["Actual"])
+        current_label = f"{current_value:.2f}{current_unit} ({current_final} point)"
+        if not df_overall_prev.empty:
+            prev_value = df_overall_prev["Actual_numeric"].mean()
+            prev_final = round(df_overall_prev["Final"].mean())
+            delta_actual = current_value - prev_value
+            delta_final = current_final - prev_final
+            arrow = "▲" if delta_actual > 0 else "▼" if delta_actual < 0 else ""
+            delta_str = f"{arrow}{delta_actual:+.2f}{current_unit} ({delta_final:+d} point)"
+        else:
+            delta_str = ""
+        st.markdown(f"**{selected_kpi}**: {current_label}")
+        if delta_str:
+            st.markdown(f"<span style='font-size:90%; color:gray;'>{delta_str}</span>", unsafe_allow_html=True)
 
 # --- (B) Total Week Performance Detail (누적 실적) ---
 st.markdown("")
 st.markdown(trans["total_week_details"][lang].format(team=selected_team_detail))
-# 누적 실적은 주 범위 내에서 계산 (shortage_cost는 합, 그 외는 평균)
 if selected_team_detail != "HWK Total":
     df_cum = df[(df["KPI"] == selected_kpi) & (df["Team"] == selected_team_detail) &
                 (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])]
-else:
-    df_cum = df[(df["KPI"] == selected_kpi) &
-                (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])]
-cum_value = cumulative_performance(df_cum, selected_kpi)
-if selected_team_detail != "HWK Total":
+    cum_value = cumulative_performance(df_cum, selected_kpi)
     # 전체 팀 중 해당 KPI의 누적 실적 최고값을 구함 (비교 기준)
     team_cum = df[(df["KPI"] == selected_kpi) & 
-                  (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])].groupby("Team").apply(lambda x: cumulative_performance(x, selected_kpi)).reset_index(name="cum")
+                  (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])
+                 ].groupby("Team").apply(lambda x: cumulative_performance(x, selected_kpi)).reset_index(name="cum")
     top_cum = team_cum["cum"].max()
     delta_cum = cum_value - top_cum
     arrow_cum = "▲" if delta_cum > 0 else "▼" if delta_cum < 0 else ""
-    delta_cum_str = f"({arrow_cum}{delta_cum:+.2f} point)" if top_cum != 0 else ""
+    delta_cum_str = f"{arrow_cum}{delta_cum:+.2f}" if top_cum != 0 else ""
+    st.markdown(f"**{selected_kpi} Cumulative:** {cum_value:.2f} " + (f"({delta_cum_str})" if delta_cum_str else ""))
 else:
-    delta_cum_str = ""
-st.markdown(f"**{selected_kpi} Cumulative:** {cum_value:.2f}" + (f" {delta_cum_str}" if delta_cum_str else ""))
+    # HWK Total: 누적 실적은 전체 팀 평균(누적)만 표시 (delta 없음)
+    df_overall_cum = df[(df["KPI"] == selected_kpi) & 
+                        (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])]
+    cum_value = cumulative_performance(df_overall_cum, selected_kpi)
+    st.markdown(f"**{selected_kpi} Cumulative:** {cum_value:.2f}")
 
 # --------------------------------------------------
 # 11. [5] Detailed Data Table (행: 7 KPI, 열: 1주차/2주차/3주차/평균)
 # --------------------------------------------------
 st.markdown("")
 st.markdown(trans["detailed_data"][lang])
-# 모든 KPI 목록 (예: CSV에 있는 KPI 목록)
+# KPI 목록 (예: CSV에 있는 모든 KPI)
 kpi_all = sorted(df["KPI"].unique())
 weeks_to_show = [1, 2, 3]  # 1주차, 2주차, 3주차
 data_table = {}
