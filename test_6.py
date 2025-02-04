@@ -174,16 +174,18 @@ if display_type in ["점수", "Score"]:
 
     # Row12: KPI별 주차별 최종 점수 및 HWK Total (팀별 점수와 전체 평균)
     st.subheader(t["row12_final"])
-    period_order = unique_weeks + ["HWK Total"]
+    # period_order에서 오른쪽 끝 컬럼은 사전에서 정의한 HWK Total (Average)로 사용
+    period_order = unique_weeks + [t["hwk_total"]]
     for kpi in all_kpis:
         st.markdown(f"### KPI: {kpi}")
         df_kpi = df[df['KPI'] == kpi].copy()
         if df_kpi.empty:
             st.write("No data for this KPI." if language=="English" else "해당 KPI에 대한 데이터가 없습니다.")
             continue
+        # 기존에는 합계(sum)를 사용했으나, 여기서는 평균(mean)으로 계산
         pivot = df_kpi.groupby(['Team', 'Week'])['Final'].sum().unstack(fill_value=0)
         pivot = pivot.reindex(unique_weeks, axis=1, fill_value=0)
-        pivot["HWK Total"] = pivot.sum(axis=1)
+        pivot[t["hwk_total"]] = pivot.mean(axis=1)  # ← 합계 대신 평균으로 계산
         pivot_with_avg = pivot.copy()
         pivot_with_avg.loc["Average"] = pivot_with_avg.mean(axis=0)
         st.dataframe(pivot_with_avg.style.format(precision=2))
@@ -250,7 +252,7 @@ else:
         # 팀별, 주차별 Actual 합계 집계
         pivot_act2 = df_kpi.groupby(['Team', 'Week'])['Actual'].sum().unstack(fill_value=0)
         pivot_act2 = pivot_act2.reindex(unique_weeks, axis=1, fill_value=0)
-        # ★ HWK Total은 합계(sum)가 아니라 평균(mean)으로 계산
+        # ★ HWK Total은 합계(sum)가 아니라 평균(mean)으로 계산 (실적 데이터에도 동일하게 적용)
         pivot_act2["HWK Total"] = pivot_act2.mean(axis=1)
         pivot_act2 = pivot_act2.reset_index()
 
@@ -280,12 +282,10 @@ else:
         avg_row = {col: pivot_act2[col].mean() for col in numeric_cols}
         avg_row["Factory"] = ""
         avg_row["Team"] = "Average" if language=="English" else "평균"
-        # 최신 pandas에서는 .append() 대신 pd.concat() 사용
         pivot_act2_with_avg = pd.concat([pivot_act2, pd.DataFrame([avg_row])], ignore_index=True)
         st.dataframe(pivot_act2_with_avg.style.format(precision=2))
         
         # --- 차트 생성 ---
-        # 차트 데이터에서는 "평균" 행은 제외
         chart_data = pivot_act2[pivot_act2["Team"] != ("Average" if language=="English" else "평균")].copy()
         period_columns = unique_weeks + ["HWK Total"]
         chart_data_melted = pd.melt(chart_data, id_vars=["Team"], value_vars=period_columns,
@@ -309,4 +309,3 @@ else:
         )
         chart_act2 = (base_act + average_line_act + average_points_act).properties(width=700, height=400)
         st.altair_chart(chart_act2, use_container_width=False)
-
