@@ -134,7 +134,7 @@ def format_label(row):
     한 행(row)의 Actual_numeric 값과 Final 값을 소수점 2자리와 함께
     "value{unit} (Final point)" 형식으로 반환
     """
-    unit = extract_unit(row["Actual"]) if pd.notnull(row["Actual"]) else ""
+    unit = extract_unit(row["Actual"]) if pd.notnull(row.get("Actual", "")) else ""
     return f"{row['Actual_numeric']:.2f}{unit} ({row['Final']} point)"
 
 def cumulative_performance(sub_df, kpi):
@@ -173,16 +173,20 @@ def render_custom_metric(col, label, value, delta, delta_color):
     value: 현재 성과 문자열 (예: "12.34% (10 point)")
     delta: 변화량 문자열 (예: "▲+1.23%(+2 point)")
     delta_color: 델타 문자열의 색상
-    폰트 크기는 12px로 작게 표시
+    폰트 크기는 약간 키워서 14px로 표시
     """
     html_metric = f"""
-    <div style="font-size:12px; margin:5px; padding:5px;">
+    <div style="font-size:14px; margin:5px; padding:5px;">
       <div style="font-weight:bold;">{label}</div>
       <div>{value}</div>
       <div style="color:{delta_color};">{delta}</div>
     </div>
     """
     col.markdown(html_metric, unsafe_allow_html=True)
+
+def format_final_label(row):
+    """Final score 전용 라벨: 정수형 점수 뒤에 'point' 표기"""
+    return f"{row['Final']:.0f} point"
 
 # --------------------------------------------------
 # 4. 데이터 로드 및 전처리
@@ -200,7 +204,11 @@ df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 # 5. 사이드바 위젯 (필터)
 # --------------------------------------------------
 st.sidebar.header("Filter Options")
-selected_kpi = st.sidebar.selectbox(trans["select_kpi"][lang], options=sorted(df["KPI"].unique()))
+# KPI 목록에 기존 KPI들과 함께 "Final score" 항목 추가
+kpi_options = sorted(list(df["KPI"].unique()))
+if "Final score" not in kpi_options:
+    kpi_options.append("Final score")
+selected_kpi = st.sidebar.selectbox(trans["select_kpi"][lang], options=kpi_options)
 # 팀 목록에 "HWK Total" 추가 (전체 팀 평균용)
 team_list = sorted(df["Team"].unique())
 team_list_extended = team_list.copy()
@@ -218,9 +226,14 @@ selected_team_detail = st.sidebar.selectbox(trans["select_team_details"][lang], 
 # --------------------------------------------------
 # 6. 데이터 필터링 (KPI, 주차 범위 적용)
 # --------------------------------------------------
-df_filtered = df[(df["KPI"] == selected_kpi) & 
-                 (df["Week_num"] >= selected_week_range[0]) & 
-                 (df["Week_num"] <= selected_week_range[1])].copy()
+if selected_kpi == "Final score":
+    # Final score의 경우, KPI 조건 없이 주차 범위만 적용
+    df_filtered = df[(df["Week_num"] >= selected_week_range[0]) & 
+                     (df["Week_num"] <= selected_week_range[1])].copy()
+else:
+    df_filtered = df[(df["KPI"] == selected_kpi) & 
+                     (df["Week_num"] >= selected_week_range[0]) & 
+                     (df["Week_num"] <= selected_week_range[1])].copy()
 
 # 최신주 결정 (필터된 데이터 중 최대 주차)
 if not df_filtered.empty:
@@ -228,71 +241,118 @@ if not df_filtered.empty:
 else:
     latest_week = None
 
-# 최신주 데이터 (df_latest): 여기서는 팀별(원래 데이터에 있는) 데이터만 포함
-df_latest = df_filtered[df_filtered["Week_num"] == latest_week].copy()
-
-# 만약 비교용 팀에 "HWK Total"이 포함되어 있다면 전체 평균 행 생성
-if "HWK Total" in selected_teams:
-    df_overall = df_filtered[df_filtered["Week_num"] == latest_week].copy()
-    if not df_overall.empty:
-        overall_actual = df_overall["Actual_numeric"].mean()
-        overall_final = round(df_overall["Final"].mean())
-        overall_unit = extract_unit(df_overall.iloc[0]["Actual"])
+# 최신주 데이터 (df_latest)
+if selected_kpi == "Final score":
+    # 각 팀별 해당 주의 Final score(7개 항목의 합계) 계산
+    df_latest = df_filtered[df_filtered["Week_num"] == latest_week].groupby("Team").agg({"Final": "sum"}).reset_index()
+    df_latest["Label"] = df_latest.apply(format_final_label, axis=1)
+    # 만약 비교용 팀에 "HWK Total"이 포함되어 있다면, 전체 팀의 평균 값 행 생성
+    if "HWK Total" in selected_teams:
+        overall_final = df_latest["Final"].mean()
         df_total = pd.DataFrame({
             "Team": ["HWK Total"],
-            "Actual_numeric": [overall_actual],
-            "Final": [overall_final],
-            "Actual": [f"{overall_actual:.2f}{overall_unit}"],
-            "Week_num": [latest_week],
-            "KPI": [selected_kpi]
+            "Final": [overall_final]
         })
+        df_total["Label"] = df_total.apply(format_final_label, axis=1)
         df_latest = pd.concat([df_latest, df_total], ignore_index=True)
-
+else:
+    df_latest = df_filtered[df_filtered["Week_num"] == latest_week].copy()
+    if "HWK Total" in selected_teams:
+        df_overall = df_filtered[df_filtered["Week_num"] == latest_week].copy()
+        if not df_overall.empty:
+            overall_actual = df_overall["Actual_numeric"].mean()
+            overall_final = round(df_overall["Final"].mean())
+            overall_unit = extract_unit(df_overall.iloc[0]["Actual"])
+            df_total = pd.DataFrame({
+                "Team": ["HWK Total"],
+                "Actual_numeric": [overall_actual],
+                "Final": [overall_final],
+                "Actual": [f"{overall_actual:.2f}{overall_unit}"],
+                "Week_num": [latest_week],
+                "KPI": [selected_kpi]
+            })
+            df_latest = pd.concat([df_latest, df_total], ignore_index=True)
+            
 # 비교 차트에 사용할 데이터: 선택한 팀만 추출
-df_comp = df_latest[df_latest["Team"].isin(selected_teams)].copy()
-df_comp["Label"] = df_comp.apply(format_label, axis=1)
+if selected_kpi == "Final score":
+    df_comp = df_latest[df_latest["Team"].isin(selected_teams)].copy()
+else:
+    df_comp = df_latest[df_latest["Team"].isin(selected_teams)].copy()
+    df_comp["Label"] = df_comp.apply(format_label, axis=1)
 
 # --------------------------------------------------
 # 7. [1] KPI Performance Comparison by Team (바 차트)
 # --------------------------------------------------
 st.markdown(trans["kpi_comparison"][lang])
-fig_bar = px.bar(
-    df_comp,
-    x="Team",
-    y="Actual_numeric",
-    text="Label",
-    labels={"Actual_numeric": trans["avg_by_team"][lang].format(kpi=selected_kpi)}
-)
-# ★ 수정사항 1: Top/Bottom 차트와 동일하게 막대 내부에 라벨 표기 (textposition='inside')
-fig_bar.update_traces(texttemplate="%{text}", textposition='inside')
+if selected_kpi == "Final score":
+    fig_bar = px.bar(
+        df_comp,
+        x="Team",
+        y="Final",
+        text="Label",
+        labels={"Final": "Final score by Team"}
+    )
+    fig_bar.update_traces(texttemplate="%{text}", textposition='inside')
+else:
+    fig_bar = px.bar(
+        df_comp,
+        x="Team",
+        y="Actual_numeric",
+        text="Label",
+        labels={"Actual_numeric": trans["avg_by_team"][lang].format(kpi=selected_kpi)}
+    )
+    fig_bar.update_traces(texttemplate="%{text}", textposition='inside')
 st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 
 # --------------------------------------------------
 # 8. [2] Weekly Performance Trend Analysis (라인 차트)
 # --------------------------------------------------
 st.markdown(trans["weekly_trend"][lang])
-# 개별 팀(“HWK Total” 제외) 데이터
-df_trend_individual = df_filtered[df_filtered["Team"].isin([t for t in selected_teams if t != "HWK Total"])].copy()
-fig_line = px.line(
-    df_trend_individual,
-    x="Week_num",
-    y="Actual_numeric",
-    color="Team",
-    markers=True,
-    labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
-    title=trans["weekly_trend_title"][lang].format(kpi=selected_kpi)
-)
-fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
-# HWK Total이 선택되면, 전체 팀 평균 per week를 검은색 점선으로 추가
-if "HWK Total" in selected_teams:
-    df_overall_trend = df_filtered.groupby("Week_num").agg({"Actual_numeric": "mean", "Final": "mean"}).reset_index()
-    fig_line.add_scatter(
-        x=df_overall_trend["Week_num"],
-        y=df_overall_trend["Actual_numeric"],
-        mode='lines+markers',
-        name="HWK Total",
-        line=dict(color='black', dash='dash')
+if selected_kpi == "Final score":
+    # Final score인 경우, 각 팀/주차별로 Final 값(합계)을 계산
+    df_trend_individual = df_filtered.groupby(["Team", "Week_num"]).agg({"Final": "sum"}).reset_index()
+    fig_line = px.line(
+        df_trend_individual,
+        x="Week_num",
+        y="Final",
+        color="Team",
+        markers=True,
+        labels={"Week_num": "Week", "Final": "Final score"},
+        title="Weekly Trend of Final score"
     )
+    fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
+    if "HWK Total" in selected_teams:
+        # HWK Total: 전체 팀의 주차별 평균 Final score 계산
+        df_overall_trend = df_filtered.groupby("Week_num").agg({"Final": "sum"}).reset_index()
+        fig_line.add_scatter(
+            x=df_overall_trend["Week_num"],
+            y=df_overall_trend["Final"],
+            mode='lines+markers',
+            name="HWK Total",
+            line=dict(color='black', dash='dash')
+        )
+else:
+    # 개별 팀(“HWK Total” 제외) 데이터
+    df_trend_individual = df_filtered[df_filtered["Team"].isin([t for t in selected_teams if t != "HWK Total"])].copy()
+    fig_line = px.line(
+        df_trend_individual,
+        x="Week_num",
+        y="Actual_numeric",
+        color="Team",
+        markers=True,
+        labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
+        title=trans["weekly_trend_title"][lang].format(kpi=selected_kpi)
+    )
+    fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
+    if "HWK Total" in selected_teams:
+        df_overall_trend = df_filtered.groupby("Week_num").agg({"Actual_numeric": "mean", "Final": "mean"}).reset_index()
+        fig_line.add_scatter(
+            x=df_overall_trend["Week_num"],
+            y=df_overall_trend["Actual_numeric"],
+            mode='lines+markers',
+            name="HWK Total",
+            line=dict(color='black', dash='dash')
+        )
 st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 
 # --------------------------------------------------
@@ -301,38 +361,61 @@ st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 st.markdown(trans["top_bottom_rankings"][lang])
 # 랭킹은 "HWK Total" 제외
 df_rank = df_comp[df_comp["Team"] != "HWK Total"].copy()
-df_rank = df_rank.sort_values("Actual_numeric", ascending=False)
+df_rank = df_rank.sort_values("Actual_numeric" if selected_kpi != "Final score" else "Final", ascending=False)
 top_n = 3 if len(df_rank) >= 3 else len(df_rank)
 bottom_n = 3 if len(df_rank) >= 3 else len(df_rank)
 top_df = df_rank.head(top_n).copy()
-bottom_df = df_rank.tail(bottom_n).copy().sort_values("Actual_numeric", ascending=True)
-# ★ 수정사항 1: Top/Bottom 차트의 라벨을 막대 내부에 표기
-top_df["Label"] = top_df.apply(format_label, axis=1)
-bottom_df["Label"] = bottom_df.apply(format_label, axis=1)
+bottom_df = df_rank.tail(bottom_n).copy().sort_values("Actual_numeric" if selected_kpi != "Final score" else "Final", ascending=True)
+if selected_kpi == "Final score":
+    top_df["Label"] = top_df.apply(lambda row: format_final_label(row), axis=1)
+    bottom_df["Label"] = bottom_df.apply(lambda row: format_final_label(row), axis=1)
+else:
+    top_df["Label"] = top_df.apply(format_label, axis=1)
+    bottom_df["Label"] = bottom_df.apply(format_label, axis=1)
 col1, col2 = st.columns(2)
 with col1:
     st.subheader(trans["top_teams"][lang].format(n=top_n, kpi=selected_kpi))
-    fig_top = px.bar(
-        top_df,
-        x="Actual_numeric",
-        y="Team",
-        orientation="h",
-        text="Label",
-        labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
-    )
+    if selected_kpi == "Final score":
+        fig_top = px.bar(
+            top_df,
+            x="Final",
+            y="Team",
+            orientation="h",
+            text="Label",
+            labels={"Final": "Final score", "Team": "Team"}
+        )
+    else:
+        fig_top = px.bar(
+            top_df,
+            x="Actual_numeric",
+            y="Team",
+            orientation="h",
+            text="Label",
+            labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
+        )
     fig_top.update_traces(texttemplate="%{text}", textposition='inside')
     fig_top.update_layout(yaxis={'categoryorder': 'total ascending'})
     st.plotly_chart(fig_top, use_container_width=True, key="top_chart")
 with col2:
     st.subheader(trans["bottom_teams"][lang].format(n=bottom_n, kpi=selected_kpi))
-    fig_bottom = px.bar(
-        bottom_df,
-        x="Actual_numeric",
-        y="Team",
-        orientation="h",
-        text="Label",
-        labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
-    )
+    if selected_kpi == "Final score":
+        fig_bottom = px.bar(
+            bottom_df,
+            x="Final",
+            y="Team",
+            orientation="h",
+            text="Label",
+            labels={"Final": "Final score", "Team": "Team"}
+        )
+    else:
+        fig_bottom = px.bar(
+            bottom_df,
+            x="Actual_numeric",
+            y="Team",
+            orientation="h",
+            text="Label",
+            labels={"Actual_numeric": f"Avg {selected_kpi} Value", "Team": "Team"}
+        )
     fig_bottom.update_traces(texttemplate="%{text}", textposition='inside', marker_color='red')
     fig_bottom.update_layout(yaxis={'categoryorder': 'total ascending'})
     st.plotly_chart(fig_bottom, use_container_width=True, key="bottom_chart")
@@ -360,7 +443,6 @@ st.markdown(trans["last_week_details"][lang].format(team=selected_team_detail, w
 cols = st.columns(3)
 i = 0
 for kpi in df_team["KPI"].unique():
-    # 선택된 팀(또는 그룹화된 경우)의 최신주 데이터
     if selected_team_detail != "HWK Total":
         df_last = df_team[df_team["Week_num"] == latest_week]
         df_prev = df_team[df_team["Week_num"] == (latest_week - 1)]
@@ -388,7 +470,6 @@ for kpi in df_team["KPI"].unique():
         else:
             delta_final = None
         if delta_actual is not None and delta_final is not None:
-            # KPI별 arrow 결정 (prs validation, 6S_audit: 높은 수치가 좋고, 그 외는 낮은 수치가 좋음)
             kpi_lower = kpi.lower()
             positive_better = ["prs validation", "6s_audit"]
             if kpi_lower in positive_better:
@@ -421,7 +502,6 @@ i = 0
 for kpi in df_cum_group["KPI"].unique():
     sub_df = df_cum[df_cum["KPI"] == kpi]
     cum_value = cumulative_performance(sub_df, kpi)
-    # 전체 팀별 누적 성과 계산 (비교용)
     team_cum = df[(df["KPI"] == kpi) & 
                   (df["Week_num"] >= selected_week_range[0]) & 
                   (df["Week_num"] <= selected_week_range[1])].groupby("Team").apply(lambda x: cumulative_performance(x, kpi)).reset_index(name="cum")
@@ -446,12 +526,15 @@ for kpi in df_cum_group["KPI"].unique():
     i += 1
 
 # --------------------------------------------------
-# 11. [5] Detailed Data Table (행: 7 KPI, 열: 1주차/2주차/3주차/평균)
+# 11. [5] Detailed Data Table (행과 열 전환: 행=주차, 열=KPI)
 # --------------------------------------------------
 st.markdown("")
 st.markdown(trans["detailed_data"][lang])
+# 주차 수는 현재 3주차로 되어 있으나 추후 12주차까지 늘어날 것을 고려하여 유연하게 처리
+# 우선 KPI별로 기존 데이터를 구성한 후 전치
 kpi_all = sorted(df["KPI"].unique())
-weeks_to_show = [1, 2, 3]
+# weeks_to_show 예시 (추후 12주차까지 확장 가능)
+weeks_to_show = list(range(1, 4))  
 data_table = {}
 for kpi in kpi_all:
     row_data = {}
@@ -481,13 +564,20 @@ for kpi in kpi_all:
         row_data["Average"] = "N/A"
     data_table[kpi] = row_data
 
-table_df = pd.DataFrame(data_table).T
-new_cols = {}
-for col in table_df.columns:
-    if "Week" in col:
-        week_num = col.split()[1]
-        new_cols[col] = trans["week_col"][lang].format(week=week_num)
-    elif col == "Average":
-        new_cols[col] = trans["average"][lang]
-table_df.rename(columns=new_cols, inplace=True)
+# 기존 data_table: key=KPI, value=dict(주차별 실적) → 전치하여 행=주차, 열=KPI
+table_df = pd.DataFrame(data_table)  # 행: 주차 (Week 1, Week 2, …, Average), 열: KPI
+# 재정렬: 인덱스를 주차 순서로 정렬 (만약 일부 주차가 없으면 그대로 둠)
+index_order = [f"Week {w}" for w in weeks_to_show] + ["Average"]
+table_df = table_df.reindex(index_order)
+# 인덱스(주차)를 다국어로 변환
+new_index = {}
+for idx in table_df.index:
+    if idx.startswith("Week"):
+        week_num = idx.split()[1]
+        new_index[idx] = trans["week_col"][lang].format(week=week_num)
+    elif idx == "Average":
+        new_index[idx] = trans["average"][lang]
+    else:
+        new_index[idx] = idx
+table_df.rename(index=new_index, inplace=True)
 st.dataframe(table_df)
