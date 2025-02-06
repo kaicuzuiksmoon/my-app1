@@ -127,6 +127,8 @@ def convert_to_numeric(x):
         if isinstance(x, str):
             if x.strip() == '-' or x.strip() == '':
                 return np.nan
+            # 쉼표를 소수점으로 변환 (예: "0,02%" -> "0.02%")
+            x = x.replace(",", ".")
             num = re.sub(r'[^\d\.-]', '', x)
             return float(num)
         else:
@@ -146,7 +148,7 @@ def format_label(row):
     return f"{row['Actual_numeric']:.2f}{unit} ({row['Final']} point)"
 
 def cumulative_performance(sub_df, kpi):
-    # shortage_cost는 누적합, 나머지는 평균
+    # shortage_cost는 누적합, 나머지는 평균 처리
     if kpi.lower() == "shortage_cost":
         return sub_df["Actual_numeric"].sum()
     else:
@@ -329,8 +331,7 @@ if selected_kpi == "Final score":
             line=dict(color='black', dash='dash')
         )
 else:
-    # KPI가 Final score가 아닐 경우
-    # 만약 선택한 KPI가 b-grade라면 y축 레이블을 "%"로 설정
+    # 만약 선택한 KPI가 b-grade라면 y축 레이블을 "%" 단위로 설정
     if selected_kpi.lower() == "b-grade":
         y_label = "b-grade (%)"
     else:
@@ -556,7 +557,7 @@ for kpi in kpi_all:
             else:
                 row_data[f"Week {w}"] = "N/A"
         else:
-            # HWK Total인 경우, 해당 주의 모든 팀에 대한 평균을 계산
+            # HWK Total: 전체 팀에 대한 평균 계산
             sub_df = df[(df["KPI"] == kpi) & (df["Week_num"] == w)]
             if not sub_df.empty:
                 val = sub_df["Actual_numeric"].mean()
