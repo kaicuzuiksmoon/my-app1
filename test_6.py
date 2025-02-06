@@ -118,8 +118,8 @@ st.title(trans["title"][lang])
 # --------------------------------------------------
 @st.cache_data
 def load_data():
-    # score.csv 파일은 이 코드와 동일한 디렉토리에 있어야 합니다.
-    df = pd.read_csv("score.csv")
+    # CSV 파일이 탭 구분자인 경우 sep="\t" 옵션을 사용합니다.
+    df = pd.read_csv("score.csv", sep="\t")
     return df
 
 def convert_to_numeric(x):
@@ -182,15 +182,15 @@ def format_final_label(row):
 # --------------------------------------------------
 df = load_data()
 
-# 우선 "Week" 열의 문자열 앞뒤 공백 제거 (예: " W4 " → "W4")
-df["Week"] = df["Week"].astype(str).str.strip()
+# "Week" 열의 문자열 앞뒤 공백 제거 및 대소문자 통일 (예: " W4 " → "W4")
+df["Week"] = df["Week"].astype(str).str.strip().str.upper()
 
 # "Week" 열에서 숫자만 추출하여 Week_num 열 생성 (예: "W4" → 4)
 df["Week_num"] = df["Week"].apply(lambda x: int(re.sub(r'\D', '', x)) if re.sub(r'\D', '', x) != '' else np.nan)
 df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
 df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
-# 디버그용: CSV 파일에서 추출된 주차 확인
+# 디버깅: CSV 파일에서 추출된 주차 확인 (예: [1,2,3,4])
 st.write("CSV에 있는 주차:", sorted(df["Week_num"].dropna().unique()))
 
 # --------------------------------------------------
