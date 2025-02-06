@@ -10,88 +10,106 @@ import os
 # --------------------------------------------------
 st.set_page_config(page_title="HWK Quality competition Event", layout="wide")
 
-# 번역 사전 (영어/한글)
+# 번역 사전 (영어/한글/베트남어)
 trans = {
     "title": {
         "en": "HWK Quality competition Event",
-        "ko": "HWK 품질 경쟁 이벤트"
+        "ko": "HWK 품질 경쟁 이벤트",
+        "vi": "HWK sự kiện thi đua chất lượng"
     },
     "kpi_comparison": {
         "en": "1. KPI Performance Comparison by Team",
-        "ko": "1. 팀별 KPI 성과 비교"
+        "ko": "1. 팀별 KPI 성과 비교",
+        "vi": "So sánh Hiệu suất KPI theo Nhóm"
     },
     "weekly_trend": {
         "en": "2. Weekly Performance Trend Analysis",
-        "ko": "2. 주간 성과 트렌드 분석"
+        "ko": "2. 주간 성과 트렌드 분석",
+        "vi": "2. Phân tích Xu hướng Hiệu suất Hàng Tuần"
     },
     "top_bottom_rankings": {
         "en": "3. KPI Top/Bottom Team Rankings",
-        "ko": "3. KPI 상위/하위 팀 순위"
+        "ko": "3. KPI 상위/하위 팀 순위",
+        "vi": "3. Xếp hạng Nhóm KPI Cao/Thấp Nhất"
     },
     "last_week_details": {
         "en": "Last Week performance Details for {team} (Week {week})",
-        "ko": "지난주 성과 상세보기: {team} (Week {week})"
+        "ko": "지난주 성과 상세보기: {team} (Week {week})",
+        "vi": "Chi tiết Hiệu suất Tuần Trước của {team} (Tuần {week})"
     },
     "total_week_details": {
         "en": "Total Week Performance Detail for {team} (All weeks)",
-        "ko": "전체 주차 누적 실적 상세: {team} (All weeks)"
+        "ko": "전체 주차 누적 실적 상세: {team} (All weeks)",
+        "vi": "Chi tiết Hiệu suất Tổng Tuần của {team} (Tất cả các tuần)"
     },
     "detailed_data": {
         "en": "Detailed Data for Selected Team",
-        "ko": "선택된 팀의 상세 데이터"
+        "ko": "선택된 팀의 상세 데이터",
+        "vi": "Dữ liệu Chi tiết cho Nhóm Đã Chọn"
     },
     "select_kpi": {
         "en": "Select KPI",
-        "ko": "KPI 선택"
+        "ko": "KPI 선택",
+        "vi": "Chọn KPI"
     },
     "select_teams": {
         "en": "Select Teams for Comparison",
-        "ko": "비교할 팀 선택 (HWK Total 포함)"
+        "ko": "비교할 팀 선택 (HWK Total 포함)",
+        "vi": "Chọn Nhóm để So Sánh"
     },
     "select_team_details": {
         "en": "Select Team for Details",
-        "ko": "상세 조회할 팀 선택 (HWK Total 포함)"
+        "ko": "상세 조회할 팀 선택 (HWK Total 포함)",
+        "vi": "chọn Nhóm để xem chi tiết"
     },
     "select_week_range": {
         "en": "Select Week Range",
-        "ko": "주차 범위 선택"
+        "ko": "주차 범위 선택",
+        "vi": "Chọn Phạm vi Tuần"
     },
     "language": {
         "en": "Language",
-        "ko": "언어"
+        "ko": "언어",
+        "vi": "ngôn ngữ"
     },
     "avg_by_team": {
         "en": "Average {kpi} by Team",
-        "ko": "팀별 {kpi} 평균"
+        "ko": "팀별 {kpi} 평균",
+        "vi": "Trung bình {kpi} theo Nhóm"
     },
     "weekly_trend_title": {
         "en": "Weekly Trend of {kpi}",
-        "ko": "{kpi} 주간 추이"
+        "ko": "{kpi} 주간 추이",
+        "vi": "Xu hướng Hàng Tuần của {kpi}"
     },
     "top_teams": {
         "en": "Top {n} Teams - {kpi}",
-        "ko": "{kpi} 상위 {n} 팀"
+        "ko": "{kpi} 상위 {n} 팀",
+        "vi": "Top {n} Nhóm - {kpi}"
     },
     "bottom_teams": {
         "en": "Bottom {n} Teams - {kpi}",
-        "ko": "{kpi} 하위 {n} 팀"
+        "ko": "{kpi} 하위 {n} 팀",
+        "vi": "Nhóm {n} Thấp Nhất - {kpi}"
     },
     "week_col": {
         "en": "Week {week}",
-        "ko": "{week}주차"
+        "ko": "{week}주차",
+        "vi": "Tuần {week}"
     },
     "average": {
         "en": "Average",
-        "ko": "평균"
+        "ko": "평균",
+        "vi": "Trung bình"
     }
 }
 
 # --------------------------------------------------
-# 2. 우측 상단 언어 선택 (영어/한글)
+# 2. 우측 상단 언어 선택 (영어/한글/베트남어)
 # --------------------------------------------------
 col_title, col_lang = st.columns([4, 1])
 with col_lang:
-    lang = st.radio("Language / 언어", options=["en", "ko"], index=0, horizontal=True)
+    lang = st.radio("Language / 언어 / ngôn ngữ", options=["en", "ko", "vi"], index=0, horizontal=True)
 
 st.title(trans["title"][lang])
 
