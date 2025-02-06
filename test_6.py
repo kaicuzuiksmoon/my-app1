@@ -518,7 +518,9 @@ for kpi in df_cum_group["KPI"].unique():
 st.markdown("")
 st.markdown(trans["detailed_data"][lang])
 kpi_all = sorted(df["KPI"].unique())
-weeks_to_show = list(range(1, 4))
+# CSV 파일에 있는 모든 주차 데이터를 동적으로 표시하도록 설정
+max_week = int(df["Week_num"].max())
+weeks_to_show = list(range(1, max_week + 1))
 data_table = {}
 for kpi in kpi_all:
     row_data = {}
