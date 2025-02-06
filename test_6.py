@@ -182,9 +182,13 @@ def format_final_label(row):
 # --------------------------------------------------
 df = load_data()
 
+# "Week" 열의 값에서 숫자만 추출하여 Week_num 열 생성 (예: "w4" → 4)
 df["Week_num"] = df["Week"].apply(lambda x: int(re.sub(r'\D', '', x)) if isinstance(x, str) and re.sub(r'\D', '', x) != '' else np.nan)
 df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
 df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
+
+# 디버그용: CSV에 있는 주차 확인
+st.write("CSV에 있는 주차:", sorted(df["Week_num"].dropna().unique()))
 
 # --------------------------------------------------
 # 5. 사이드바 위젯 (필터)
@@ -199,11 +203,14 @@ team_list_extended = team_list.copy()
 if "HWK Total" not in team_list_extended:
     team_list_extended.append("HWK Total")
 selected_teams = st.sidebar.multiselect(trans["select_teams"][lang], options=team_list_extended, default=team_list)
+
+# 슬라이더는 전체 CSV 데이터를 기준으로 주차 범위(정수 단위, step=1)를 지정
 selected_week_range = st.sidebar.slider(
     trans["select_week_range"][lang],
     int(df["Week_num"].min()),
     int(df["Week_num"].max()),
-    (int(df["Week_num"].min()), int(df["Week_num"].max()))
+    (int(df["Week_num"].min()), int(df["Week_num"].max())),
+    step=1
 )
 selected_team_detail = st.sidebar.selectbox(trans["select_team_details"][lang], options=team_list_extended, index=0)
 
@@ -218,7 +225,7 @@ else:
                      (df["Week_num"] >= selected_week_range[0]) & 
                      (df["Week_num"] <= selected_week_range[1])].copy()
 
-# 선택된 KPI가 Final score가 아닌 경우 최신 주차를 기준으로 상세정보에 활용
+# KPI가 Final score가 아닐 경우, 최신 주차를 기준으로 상세정보 활용
 if selected_kpi != "Final score":
     if not df_filtered.empty:
         latest_week = int(df_filtered["Week_num"].max())
@@ -235,7 +242,6 @@ else:
 # --------------------------------------------------
 st.markdown(trans["kpi_comparison"][lang])
 if selected_kpi == "Final score":
-    # 선택된 주차 범위 전체에 대해 팀별 Final 점수 누적합(sum) 계산
     df_latest = df_filtered.groupby("Team").agg({"Final": "sum"}).reset_index()
     df_latest["Label"] = df_latest.apply(format_final_label, axis=1)
     if "HWK Total" in selected_teams:
@@ -295,7 +301,6 @@ st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 # --------------------------------------------------
 st.markdown(trans["weekly_trend"][lang])
 if selected_kpi == "Final score":
-    # 각 팀별로 주차순 정렬 후 누적 합계(cumsum) 계산
     df_trend_individual = df_filtered.sort_values("Week_num").groupby("Team").apply(
         lambda x: x.assign(CumFinal=x["Final"].cumsum())
     ).reset_index(drop=True)
@@ -536,7 +541,6 @@ for kpi in kpi_all:
             val = sub_df.iloc[0]["Actual_numeric"]
             final_val = sub_df.iloc[0]["Final"]
             unit = extract_unit(sub_df.iloc[0]["Actual"])
-            # 괄호 부분에 <br> 태그를 추가해 2줄로 표기
             formatted = f"{val:.2f}{unit}<br>({final_val} point)"
             row_data[f"Week {w}"] = formatted
             values.append(val)
