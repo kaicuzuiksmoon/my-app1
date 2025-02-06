@@ -146,6 +146,7 @@ def format_label(row):
     return f"{row['Actual_numeric']:.2f}{unit} ({row['Final']} point)"
 
 def cumulative_performance(sub_df, kpi):
+    # shortage_cost는 누적합, 나머지는 평균
     if kpi.lower() == "shortage_cost":
         return sub_df["Actual_numeric"].sum()
     else:
@@ -182,7 +183,7 @@ def format_final_label(row):
 # --------------------------------------------------
 df = load_data()
 
-# "Week" 열의 문자열 앞뒤 공백 제거 및 대소문자 통일 (예: " W4 " → "W4")
+# "Week" 열의 앞뒤 공백 제거 및 대문자 통일 (예: " W4 " → "W4")
 df["Week"] = df["Week"].astype(str).str.strip().str.upper()
 
 # "Week" 열에서 숫자만 추출하여 Week_num 열 생성 (예: "W4" → 4)
@@ -190,8 +191,8 @@ df["Week_num"] = df["Week"].apply(lambda x: int(re.sub(r'\D', '', x)) if re.sub(
 df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
 df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
-# 디버깅: CSV 파일에서 추출된 주차 확인 (예: [1,2,3,4])
-# st.write("CSV에 있는 주차:", sorted(df["Week_num"].dropna().unique()))
+# 디버깅: CSV 파일에서 추출된 주차 확인 (예: [1, 2, 3, 4])
+st.write("CSV에 있는 주차:", sorted(df["Week_num"].dropna().unique()))
 
 # --------------------------------------------------
 # 5. 사이드바 위젯 (필터)
@@ -328,6 +329,12 @@ if selected_kpi == "Final score":
             line=dict(color='black', dash='dash')
         )
 else:
+    # KPI가 Final score가 아닐 경우
+    # 만약 선택한 KPI가 b-grade라면 y축 레이블을 "%"로 설정
+    if selected_kpi.lower() == "b-grade":
+        y_label = "b-grade (%)"
+    else:
+        y_label = f"{selected_kpi} Value"
     df_trend_individual = df_filtered[df_filtered["Team"].isin([t for t in selected_teams if t != "HWK Total"])].copy()
     fig_line = px.line(
         df_trend_individual,
@@ -335,7 +342,7 @@ else:
         y="Actual_numeric",
         color="Team",
         markers=True,
-        labels={"Week_num": "Week", "Actual_numeric": f"{selected_kpi} Value"},
+        labels={"Week_num": "Week", "Actual_numeric": y_label},
         title=trans["weekly_trend_title"][lang].format(kpi=selected_kpi)
     )
     fig_line.update_xaxes(tickmode='linear', tick0=selected_week_range[0], dtick=1)
@@ -538,18 +545,29 @@ for kpi in kpi_all:
     for w in weeks_to_show:
         if selected_team_detail != "HWK Total":
             sub_df = df[(df["KPI"] == kpi) & (df["Team"] == selected_team_detail) & (df["Week_num"] == w)]
+            if not sub_df.empty:
+                val = sub_df.iloc[0]["Actual_numeric"]
+                final_val = sub_df.iloc[0]["Final"]
+                unit = extract_unit(sub_df.iloc[0]["Actual"])
+                formatted = f"{val:.2f}{unit}<br>({final_val} point)"
+                row_data[f"Week {w}"] = formatted
+                values.append(val)
+                finals.append(final_val)
+            else:
+                row_data[f"Week {w}"] = "N/A"
         else:
+            # HWK Total인 경우, 해당 주의 모든 팀에 대한 평균을 계산
             sub_df = df[(df["KPI"] == kpi) & (df["Week_num"] == w)]
-        if not sub_df.empty:
-            val = sub_df.iloc[0]["Actual_numeric"]
-            final_val = sub_df.iloc[0]["Final"]
-            unit = extract_unit(sub_df.iloc[0]["Actual"])
-            formatted = f"{val:.2f}{unit}<br>({final_val} point)"
-            row_data[f"Week {w}"] = formatted
-            values.append(val)
-            finals.append(final_val)
-        else:
-            row_data[f"Week {w}"] = "N/A"
+            if not sub_df.empty:
+                val = sub_df["Actual_numeric"].mean()
+                final_val = sub_df["Final"].mean()
+                unit = extract_unit(sub_df.iloc[0]["Actual"])
+                formatted = f"{val:.2f}{unit}<br>({final_val:.2f} point)"
+                row_data[f"Week {w}"] = formatted
+                values.append(val)
+                finals.append(final_val)
+            else:
+                row_data[f"Week {w}"] = "N/A"
     if values:
         avg_val = sum(values) / len(values)
         avg_final = sum(finals) / len(finals) if finals else 0
