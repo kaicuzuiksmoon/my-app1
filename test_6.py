@@ -192,7 +192,7 @@ df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
 df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
 # 디버깅: CSV 파일에서 추출된 주차 확인 (예: [1, 2, 3, 4])
-st.write("CSV에 있는 주차:", sorted(df["Week_num"].dropna().unique()))
+# st.write("CSV에 있는 주차:", sorted(df["Week_num"].dropna().unique()))
 
 # --------------------------------------------------
 # 5. 사이드바 위젯 (필터)
