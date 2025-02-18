@@ -2086,7 +2086,7 @@ def cumulative_performance(sub_df, kpi):
 def get_trend_emoticon(kpi, delta):
     """
     모든 KPI에서 '위로 가는' 화살표(증가/감소)는 '😀'(긍정),
-    '아래로 가는' 화살표는 '😞'(부정)으로 표시.
+    '아래로 가는' 화살표는 '😡'(부정)으로 표시.
     
     단, KPI가 양(positive) 지표인지 음(negative) 지표인지에 따라
     delta의 부호가 '개선'을 의미하는지 달라짐.
@@ -2098,20 +2098,20 @@ def get_trend_emoticon(kpi, delta):
     positive_better = ["prs validation", "6s_audit", "final score"]
     negative_better = ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]
     
-    # 양 지표: delta > 0 -> 😀, delta < 0 -> 😞
+    # 양 지표: delta > 0 -> 😀, delta < 0 -> 😡
     if kpi_lower in positive_better:
         if delta > 0:
             return "😀"
         elif delta < 0:
-            return "😞"
+            return "😡"
         else:
             return ""
-    # 음 지표: delta < 0 -> 😀, delta > 0 -> 😞
+    # 음 지표: delta < 0 -> 😀, delta > 0 -> 😡
     elif kpi_lower in negative_better:
         if delta < 0:
             return "😀"
         elif delta > 0:
-            return "😞"
+            return "😡"
         else:
             return ""
     else:
@@ -2119,7 +2119,7 @@ def get_trend_emoticon(kpi, delta):
         if delta > 0:
             return "😀"
         elif delta < 0:
-            return "😞"
+            return "😡"
         else:
             return ""
 
