@@ -41,13 +41,13 @@ W1	Team4	attendance	9.16%	1
 W1	Team5	attendance	7.83%	3
 W1	Team6	attendance	7.50%	4
 W1	Team7	attendance	8.28%	2
-W1	Team1	5 prs validation	93.0496%	4
-W1	Team2	5 prs validation	90.4167%	3
-W1	Team3	5 prs validation	89.9020%	2
-W1	Team4	5 prs validation	94.5493%	6
-W1	Team5	5 prs validation	95.6121%	7
-W1	Team6	5 prs validation	93.4167%	5
-W1	Team7	5 prs validation	87.3205%	1
+W1	Team1	5 prs validation	93.05%	4
+W1	Team2	5 prs validation	90.42%	3
+W1	Team3	5 prs validation	89.90%	2
+W1	Team4	5 prs validation	94.55%	6
+W1	Team5	5 prs validation	95.61%	7
+W1	Team6	5 prs validation	93.42%	5
+W1	Team7	5 prs validation	87.32%	1
 W2	Team1	issue_tracking	78.2 minutes	2
 W2	Team2	issue_tracking	44.2 minutes	6
 W2	Team3	issue_tracking	44.4 minutes	6
@@ -90,13 +90,13 @@ W2	Team4	attendance	5.83%	5
 W2	Team5	attendance	6.36%	2
 W2	Team6	attendance	2.87%	7
 W2	Team7	attendance	6.81%	1
-W2	Team1	5 prs validation	93.8763%	6
-W2	Team2	5 prs validation	93.6619%	5
-W2	Team3	5 prs validation	91.6927%	1
-W2	Team4	5 prs validation	93.4141%	4
-W2	Team5	5 prs validation	95.6410%	7
-W2	Team6	5 prs validation	92.8767%	3
-W2	Team7	5 prs validation	91.7568%	2
+W2	Team1	5 prs validation	93.88%	6
+W2	Team2	5 prs validation	93.66%	5
+W2	Team3	5 prs validation	91.69%	1
+W2	Team4	5 prs validation	93.41%	4
+W2	Team5	5 prs validation	95.64%	7
+W2	Team6	5 prs validation	92.88%	3
+W2	Team7	5 prs validation	91.76%	2
 W3	Team1	issue_tracking	76.6 minutes	3
 W3	Team2	issue_tracking	68.0 minutes	4
 W3	Team3	issue_tracking	61.4 minutes	4
@@ -139,13 +139,13 @@ W3	Team4	attendance	5.44%	5
 W3	Team5	attendance	5.69%	3
 W3	Team6	attendance	5.22%	6
 W3	Team7	attendance	4.26%	7
-W3	Team1	5 prs validation	95.7583%	6
-W3	Team2	5 prs validation	93.5864%	3
-W3	Team3	5 prs validation	94.0759%	4
-W3	Team4	5 prs validation	94.4981%	5
-W3	Team5	5 prs validation	95.9170%	7
-W3	Team6	5 prs validation	93.4314%	2
-W3	Team7	5 prs validation	91.7152%	1
+W3	Team1	5 prs validation	95.76%	6
+W3	Team2	5 prs validation	93.59%	3
+W3	Team3	5 prs validation	94.08%	4
+W3	Team4	5 prs validation	94.50%	5
+W3	Team5	5 prs validation	95.92%	7
+W3	Team6	5 prs validation	93.43%	2
+W3	Team7	5 prs validation	91.72%	1
 W4	Team1	issue_tracking	40 minutes	5
 W4	Team2	issue_tracking	69.5 minutes	3
 W4	Team3	issue_tracking	22.4 minutes	7
@@ -224,11 +224,11 @@ W5	Team5	shortage_cost	$161.90 	6
 W5	Team6	shortage_cost	$644.22 	1
 W5	Team7	shortage_cost	$644.22 	1
 W5	Team1	6S_audit	86.967	1
-W5	Team2	6S_audit	87.370	3
+W5	Team2	6S_audit	87.37	3
 W5	Team3	6S_audit	87.054	2
-W5	Team4	6S_audit	87.380	4
+W5	Team4	6S_audit	87.38	4
 W5	Team5	6S_audit	87.508	6
-W5	Team6	6S_audit	87.440	5
+W5	Team6	6S_audit	87.44	5
 W5	Team7	6S_audit	87.845	7
 W5	Team1	attendance	10.60%	6
 W5	Team2	attendance	20.33%	2
@@ -237,10 +237,59 @@ W5	Team4	attendance	12.01%	5
 W5	Team5	attendance	13.92%	4
 W5	Team6	attendance	7.16%	7
 W5	Team7	attendance	14.85%	3
-W5	Team1	5 prs validation	94.2748%	3
-W5	Team2	5 prs validation	89.9586%	2
-W5	Team3	5 prs validation	96.6173%	7
-W5	Team4	5 prs validation	96.2606%	5
-W5	Team5	5 prs validation	96.2772%	6
-W5	Team6	5 prs validation	96.1953%	4
-W5	Team7	5 prs validation	88.8715%	1
+W5	Team1	5 prs validation	94.27%	3
+W5	Team2	5 prs validation	89.96%	2
+W5	Team3	5 prs validation	96.62%	7
+W5	Team4	5 prs validation	96.26%	5
+W5	Team5	5 prs validation	96.28%	6
+W5	Team6	5 prs validation	96.20%	4
+W5	Team7	5 prs validation	88.87%	1
+W6	Team1	issue_tracking	34.8 minutes	3
+W6	Team2	issue_tracking	28.2 minutes	3
+W6	Team3	issue_tracking	27.2 minutes	3
+W6	Team4	issue_tracking	58.2 minutes	2
+W6	Team5	issue_tracking	32.3 minutes	3
+W6	Team6	issue_tracking	63.3 minutes	1
+W6	Team7	issue_tracking	34.3 minutes	3
+W6	Team1	AQL_performance	1.52%	5
+W6	Team2	AQL_performance	2.33%	3
+W6	Team3	AQL_performance	0.00%	6
+W6	Team4	AQL_performance	4.17%	2
+W6	Team5	AQL_performance	2.13%	4
+W6	Team6	AQL_performance	0.00%	6
+W6	Team7	AQL_performance	4.88%	1
+W6	Team1	B-grade	0.00%	6
+W6	Team2	B-grade	0.01%	5
+W6	Team3	B-grade	0.00%	6
+W6	Team4	B-grade	0.03%	3
+W6	Team5	B-grade	0.06%	1
+W6	Team6	B-grade	0.04%	2
+W6	Team7	B-grade	0.03%	3
+W6	Team1	shortage_cost	$0.00 	4
+W6	Team2	shortage_cost	$0.00 	4
+W6	Team3	shortage_cost	$78 	1
+W6	Team4	shortage_cost	$0.00 	4
+W6	Team5	shortage_cost	$0.00 	4
+W6	Team6	shortage_cost	$65.59 	2
+W6	Team7	shortage_cost	$65.59 	2
+W6	Team1	6S_audit	87.097	1
+W6	Team2	6S_audit	87.417	4
+W6	Team3	6S_audit	87.159	2
+W6	Team4	6S_audit	87.517	6
+W6	Team5	6S_audit	87.514	5
+W6	Team6	6S_audit	87.3	3
+W6	Team7	6S_audit	87.75	7
+W6	Team1	attendance	6.62%	5
+W6	Team2	attendance	8.16%	3
+W6	Team3	attendance	9.51%	1
+W6	Team4	attendance	9.41%	2
+W6	Team5	attendance	7.37%	4
+W6	Team6	attendance	6.48%	6
+W6	Team7	attendance	6.42%	7
+W6	Team1	5 prs validation	91.76%	2
+W6	Team2	5 prs validation	94.83%	4
+W6	Team3	5 prs validation	96.78%	5
+W6	Team4	5 prs validation	97.09%	6
+W6	Team5	5 prs validation	94.80%	3
+W6	Team6	5 prs validation	97.35%	7
+W6	Team7	5 prs validation	81.84%	1
