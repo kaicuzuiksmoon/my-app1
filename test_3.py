@@ -110,7 +110,7 @@ trans = {
     },
     "assembly_quality_competition_kpi": {
         "en": "Assembly Quality Competition KPI",
-        "ko": "조립 품질 경쟁 KPI",
+        "ko": "제화팀 품질 KPI",
         "vi": "KPI cuộc thi chất lượng lắp ráp"
     },
     "other_kpi": {
