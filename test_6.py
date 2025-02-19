@@ -602,6 +602,8 @@ if selected_team_detail == "HWK Total":
             "Actual": g["Actual"].iloc[0]
         }))
         .reset_index()
+    )
+    
 else:
     df_cum = df[
         (df["Team"] == selected_team_detail) &
