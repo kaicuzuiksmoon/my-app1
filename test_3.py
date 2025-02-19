@@ -958,7 +958,7 @@ if not st.session_state["password_verified"]:
     if not password:
         st.stop()
     else:
-        if password == "1234":  # 원하는 비밀번호로 변경하세요.
+        if password == "qip1111":  # 원하는 비밀번호로 변경하세요.
             st.session_state["password_verified"] = True
         else:
             st.error("Incorrect password!")
