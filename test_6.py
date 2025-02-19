@@ -40,12 +40,12 @@ trans = {
     "total_week_details": {
         "en": "Total Week Performance Detail for {team} (All weeks)",
         "ko": "전체 주차 누적 실적 상세: {team} (All weeks)",
-        "vi": "Chi tiết hiệu suất tổng tuần của {team} (Tất cả các tuần)"
+        "vi": "Chi tiết hiệu suất tổng 주의 của {team} (Tất cả các tuần)"
     },
     "detailed_data": {
         "en": "Detailed Data for Selected Team",
         "ko": "선택된 팀의 상세 데이터",
-        "vi": "Dữ liệu chi tiết cho nhóm đã chọn"
+        "vi": "Dữ liệu chi tiết cho nhóm đã 선택"
     },
     "select_kpi": {
         "en": "Select KPI",
@@ -288,6 +288,9 @@ def get_range_comment(lang_code, start_week, end_week):
 def format_value_with_unit(val, unit):
     if pd.isna(val):
         return "N/A"
+    # --- 한글 선택 시 'minutes'를 '분'으로 변환
+    if lang == "ko" and unit == "minutes":
+        unit = "분"
     if unit == "$":
         return f"${val:.2f}"
     elif unit == "%" and not f"{val:.2f}".endswith("%"):
@@ -580,11 +583,7 @@ if selected_team_detail == "HWK Total":
         df_cum[df_cum["Week_num"] == latest_week]
         .groupby("KPI")
         .apply(lambda g: pd.Series({
-            "Actual_numeric": (
-                g["Actual_numeric"].sum()
-                if g.name.lower() == "shortage_cost"
-                else g["Actual_numeric"].mean()
-            ),
+            "Actual_numeric": (g["Actual_numeric"].sum() if g.name.lower() == "shortage_cost" else g["Actual_numeric"].mean()),
             "Final": g["Final"].mean(),
             "Actual": g["Actual"].iloc[0] if not g.empty else None
         }))
@@ -768,7 +767,7 @@ else:
         kpi_unit = get_kpi_unit(kpi)
         kpi_display_name = get_kpi_display_name(kpi, lang)
         
-        # --- HWK Total: 2줄 표시 (현재 평균, Δ)
+        # --- HWK Total: 2줄 표시 (현재 값, Δ)
         if selected_team_detail == "HWK Total":
             current_df = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= latest_week) & (df["KPI"].str.lower() == kpi_lower)]
             previous_df = df[(df["Week_num"] >= start_week) & (df["Week_num"] < latest_week) & (df["KPI"].str.lower() == kpi_lower)]
@@ -979,25 +978,28 @@ for idx in table_df.index:
         new_index[idx] = idx
 table_df.rename(index=new_index, inplace=True)
 
-def multiline_header(col_name: str) -> str:
-    if col_name == "포장 완료 제품 5족 품질 검증 통과율":
-        return "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
-    elif col_name == "6S 어딧 점수":
-        return "6S 어딧<br>점수"
-    elif col_name == "수검 리젝율":
-        return "수검<br>리젝율"
-    elif col_name == "B-grade 발생율":
-        return "B-grade<br>발생율"
-    elif col_name == "결근율":
-        return "결근<br>율"
-    elif col_name == "이슈 개선 소요 시간":
-        return "이슈 개선<br>소요 시간"
-    elif col_name == "부족분 금액":
-        return "부족분<br>금액"
-    else:
-        return "<br>".join(col_name.split())
-
-table_df.columns = [multiline_header(c) for c in table_df.columns]
+# --- 열타이틀 수정: 한글 선택 시 KPI 열은 KPI의 한글 표기로 변경 ---
+if lang == "ko":
+    table_df.columns = [get_kpi_display_name(c, "ko") for c in table_df.columns]
+else:
+    def multiline_header(col_name: str) -> str:
+        if col_name == "포장 완료 제품 5족 품질 검증 통과율":
+            return "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
+        elif col_name == "6S 어딧 점수":
+            return "6S 어딧<br>점수"
+        elif col_name == "수검 리젝율":
+            return "수검<br>리젝율"
+        elif col_name == "B-grade 발생율":
+            return "B-grade<br>발생율"
+        elif col_name == "결근율":
+            return "결근<br>율"
+        elif col_name == "이슈 개선 소요 시간":
+            return "이슈 개선<br>소요 시간"
+        elif col_name == "부족분 금액":
+            return "부족분<br>금액"
+        else:
+            return "<br>".join(col_name.split())
+    table_df.columns = [multiline_header(c) for c in table_df.columns]
 
 def highlight_last_row(row):
     if row.name == table_df.index[-1]:
