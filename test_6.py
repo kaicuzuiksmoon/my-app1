@@ -112,13 +112,12 @@ KPI_UNITS = {
     "b-grade": "%",
     "attendance": "%",
     "issue_tracking": "minutes",
-    "shortage_cost": "$",
+    "shortage_cost": "$",  # '$'를 숫자 '앞'에 붙이기 위해 이 단위를 사용
     "final score": ""
 }
 
 # KPI별 한글 표기 매핑 (lang == "ko"일 때 사용)
 KPI_NAME_MAP = {
-    # 예: CSV에 "5 prs validation"이라는 KPI가 있다고 가정
     "5 prs validation": {
         "ko": "포장 완료 제품 5족 품질 검증 통과율",
         "en": "5 prs validation",
@@ -162,7 +161,6 @@ KPI_NAME_MAP = {
 }
 
 def get_kpi_display_name(kpi_name: str, lang: str) -> str:
-    """선택한 언어에 맞게 KPI명을 반환"""
     key = kpi_name.lower()
     if key in KPI_NAME_MAP:
         return KPI_NAME_MAP[key].get(lang, kpi_name)
@@ -188,12 +186,10 @@ def to_halfwidth(s: str) -> str:
 
 @st.cache_data
 def load_data():
-    """CSV에서 데이터 불러오기"""
     df = pd.read_csv("score.csv", sep="\t", encoding="utf-8")
     return df
 
 def convert_to_numeric(x):
-    """문자열 수치를 float로 변환, 불가능하면 np.nan"""
     try:
         if isinstance(x, str):
             if x.strip() == '-' or x.strip() == '':
@@ -207,7 +203,6 @@ def convert_to_numeric(x):
         return np.nan
 
 def get_kpi_unit(kpi_name: str) -> str:
-    """KPI에 맞는 단위 반환"""
     return KPI_UNITS.get(kpi_name.lower(), "")
 
 def aggregator_for_kpi(df_sub: pd.DataFrame, kpi_name: str) -> float:
@@ -217,17 +212,13 @@ def aggregator_for_kpi(df_sub: pd.DataFrame, kpi_name: str) -> float:
     """
     kpi_lower = kpi_name.lower()
     if kpi_lower == "final score":
-        # final score -> Final 컬럼 합
         return df_sub["Final"].sum()
     elif kpi_lower == "shortage_cost":
-        # shortage_cost -> Actual_numeric 합
         return df_sub["Actual_numeric"].sum()
     else:
-        # 나머지는 평균
         return df_sub["Actual_numeric"].mean()
 
 def cumulative_performance(sub_df, kpi):
-    """Top/Bottom 랭킹 계산 등에서 사용하는 누적/평균 로직"""
     kpi_lower = kpi.lower()
     if kpi_lower == "final score":
         return sub_df["Final"].sum()
@@ -237,7 +228,6 @@ def cumulative_performance(sub_df, kpi):
         return sub_df["Actual_numeric"].mean()
 
 def get_weekly_value_color(kpi, weekly_value, avg_value):
-    """주별 수치와 전체 평균 비교 후 색상 결정"""
     positive_better = ["5 prs validation", "6s_audit", "final score"]
     negative_better = ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]
     if weekly_value is None or avg_value is None:
@@ -250,7 +240,6 @@ def get_weekly_value_color(kpi, weekly_value, avg_value):
         return "blue" if weekly_value >= avg_value else "red"
 
 def get_trend_emoticon(kpi, delta):
-    """증감(delta)에 따라 😀/😡 이모티콘 표시"""
     if delta is None:
         return ""
     kpi_lower = kpi.lower()
@@ -279,7 +268,6 @@ def get_trend_emoticon(kpi, delta):
             return ""
 
 def render_custom_metric(col, label, value, delta_str, color="black"):
-    """메트릭(카드형) UI를 직접 HTML로 렌더링"""
     html_metric = f"""
     <div style="font-size:14px; margin:5px; padding:5px;">
       <div style="font-weight:bold;">{label}</div>
@@ -290,11 +278,9 @@ def render_custom_metric(col, label, value, delta_str, color="black"):
     col.markdown(html_metric, unsafe_allow_html=True)
 
 def format_final_label(row):
-    """최종점수를 바 차트용 라벨로 변환"""
     return f"{row['Final']:.0f} point"
 
 def get_range_comment(lang_code, start_week, end_week):
-    """증감 비교 시, 범위를 나타내는 문자열 반환"""
     if lang_code == "ko":
         return f"({start_week}주차~{end_week}주차 평균 대비)"
     elif lang_code == "vi":
@@ -302,13 +288,16 @@ def get_range_comment(lang_code, start_week, end_week):
     else:
         return f"(From Week {start_week} to Week {end_week} average compared to)"
 
+# **수정**: $표기를 숫자 앞에 두기 위해 if unit == "$"일 때 "$" + 값 형태로 반환
 def format_value_with_unit(val, unit):
-    """KPI 단위가 %면 값 뒤에 %를 붙여주기"""
     if pd.isna(val):
         return "N/A"
-    if unit == "%" and not f"{val:.2f}".endswith("%"):
+    if unit == "$":  # 숫자 앞에 $
+        return f"${val:.2f}"
+    elif unit == "%" and not f"{val:.2f}".endswith("%"):
         return f"{val:.2f}{unit}"
-    return f"{val:.2f}{unit}"
+    else:
+        return f"{val:.2f}{unit}"
 
 # --------------------------------------------------
 # 4. 데이터 로드 및 전처리
@@ -326,22 +315,18 @@ df["Actual_numeric"] = df["Actual"].apply(convert_to_numeric)
 df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
 # --------------------------------------------------
-# 5. 사이드바 위젯 (필터) - 주차 범위, KPI, 팀 선택
+# 5. 사이드바 위젯 (필터)
 # --------------------------------------------------
 st.sidebar.header("Filter Options")
 
-# KPI 목록
 kpi_options = sorted(list(df["KPI"].unique()))
-# 'Final score'가 없다면 추가(별도 계산용)
 if "Final score" not in kpi_options:
     kpi_options.append("Final score")
 if "5 prs validation" not in kpi_options:
-    # CSV에 "5 prs validation"이 없을 수도 있으니, 필요 시 추가
     kpi_options.append("5 prs validation")
 
 selected_kpi = st.sidebar.selectbox(trans["select_kpi"][lang], options=kpi_options)
 
-# 팀 목록
 team_list = sorted(df["Team"].unique())
 team_list_extended = team_list.copy()
 if "HWK Total" not in team_list_extended:
@@ -352,7 +337,6 @@ selected_teams = st.sidebar.multiselect(
     default=team_list
 )
 
-# 주차 범위 (min/max)
 min_week = int(df["Week_num"].min())
 max_week = int(df["Week_num"].max())
 selected_week_range = st.sidebar.slider(
@@ -369,23 +353,21 @@ selected_team_detail = st.sidebar.selectbox(
     index=0
 )
 
-# 주차 범위 역순 방지 (시작 주차 > 끝 주차일 경우 정렬)
 start_week, end_week = sorted(selected_week_range)
 
 # --------------------------------------------------
 # 6. KPI/주차 범위 필터링
 # --------------------------------------------------
-# final score, 5 prs validation 등이 실제 df["KPI"]에 없을 수도 있으므로 우선 주차 범위로 필터
-if selected_kpi.lower() in ["final score", "5 prs validation"]:
+kpi_lower = selected_kpi.lower()
+if kpi_lower in ["final score", "5 prs validation"]:
     df_filtered = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)].copy()
 else:
     df_filtered = df[
-        (df["KPI"].str.lower() == selected_kpi.lower()) &
+        (df["KPI"].str.lower() == kpi_lower) &
         (df["Week_num"] >= start_week) &
         (df["Week_num"] <= end_week)
     ].copy()
 
-# 필터 결과가 없으면 종료
 if df_filtered.empty:
     st.warning("선택한 필터에 해당하는 데이터가 없습니다.")
     st.stop()
@@ -399,54 +381,38 @@ else:
 
 # --------------------------------------------------
 # 7. [1] KPI Performance Comparison by Team (바 차트)
-#    - 여러 주차를 선택하면 shortage_cost, final score는 합계, 그 외는 평균
 # --------------------------------------------------
 st.markdown(trans["kpi_comparison"][lang])
 
-# 팀별 aggregator
 df_bar = df_filtered.groupby("Team").apply(lambda x: aggregator_for_kpi(x, selected_kpi)).reset_index(name="Value")
-if df_bar.empty:
-    st.warning("KPI Performance Comparison 데이터를 계산할 수 없습니다.")
-    st.stop()
-
-# "HWK Total"이 선택되었다면, 전체 합/평균을 추가
 if "HWK Total" in selected_teams:
-    # shortage_cost / final score -> 합계, 그 외 -> 평균
-    if selected_kpi.lower() == "final score":
+    if kpi_lower == "final score":
         total_val = df_filtered["Final"].sum()
-    elif selected_kpi.lower() == "shortage_cost":
+    elif kpi_lower == "shortage_cost":
         total_val = df_filtered["Actual_numeric"].sum()
     else:
         total_val = df_filtered["Actual_numeric"].mean()
-    df_total = pd.DataFrame({
-        "Team": ["HWK Total"],
-        "Value": [total_val]
-    })
+    df_total = pd.DataFrame({"Team": ["HWK Total"], "Value": [total_val]})
     df_bar = pd.concat([df_bar, df_total], ignore_index=True)
 
-# 선택된 팀만 필터
 df_bar = df_bar[df_bar["Team"].isin(selected_teams)].copy()
 
-# 시각화용 라벨
 def make_bar_label(team, val, kpi_name):
     k_unit = get_kpi_unit(kpi_name)
-    if kpi_name.lower() in ["final score"]:
+    if kpi_name.lower() == "final score":
         return f"{val:.0f} point"
+    elif kpi_name.lower() == "shortage_cost":
+        # $표기를 숫자 앞에
+        return f"${val:.2f}"
     else:
-        # shortage_cost($), 혹은 % 단위, etc
-        if kpi_name.lower() == "shortage_cost":
-            return f"{k_unit}{val:.2f}"
+        if k_unit == "%":
+            return f"{val:.2f}{k_unit}"
         else:
-            # %라면 뒤에 % 붙이기
-            if k_unit == "%":
-                return f"{val:.2f}{k_unit}"
-            else:
-                return f"{val:.2f}{k_unit}"
+            return f"{val:.2f}{k_unit}"
 
 df_bar["Label"] = df_bar.apply(lambda row: make_bar_label(row["Team"], row["Value"], selected_kpi), axis=1)
 
-# 그래프
-if selected_kpi.lower() == "final score":
+if kpi_lower == "final score":
     fig_bar = px.bar(
         df_bar,
         x="Team",
@@ -462,6 +428,7 @@ else:
         text="Label",
         labels={"Value": trans["avg_by_team"][lang].format(kpi=selected_kpi)}
     )
+
 fig_bar.update_traces(texttemplate="%{text}", textposition='inside')
 st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 
@@ -470,8 +437,7 @@ st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 # --------------------------------------------------
 st.markdown(trans["weekly_trend"][lang])
 
-if selected_kpi.lower() == "final score":
-    # 주차별 Final 점수 누적합
+if kpi_lower == "final score":
     df_trend_individual = df_filtered.sort_values("Week_num").groupby("Team").apply(
         lambda x: x.assign(CumFinal=x["Final"].cumsum())
     ).reset_index(drop=True)
@@ -487,7 +453,6 @@ if selected_kpi.lower() == "final score":
     )
     fig_line.update_xaxes(tickmode='linear', tick0=start_week, dtick=1)
 
-    # HWK Total이 포함되면 전체 합계 라인 추가
     if "HWK Total" in selected_teams:
         df_overall_trend = df_filtered.sort_values("Week_num").groupby("Week_num").agg({"Final": "sum"}).reset_index()
         df_overall_trend["CumFinal"] = df_overall_trend["Final"].cumsum()
@@ -499,9 +464,7 @@ if selected_kpi.lower() == "final score":
             line=dict(color='black', dash='dash')
         )
 
-elif selected_kpi.lower() == "shortage_cost":
-    # shortage_cost는 주차별 합(혹은 평균) 시각화
-    # 여기서는 평균으로 보거나 합으로 볼 수 있으나, 예시로 '합계'를 본다고 가정
+elif kpi_lower == "shortage_cost":
     df_trend_individual = df_filtered.groupby(["Team", "Week_num"]).agg({"Actual_numeric": "sum"}).reset_index()
     fig_line = px.line(
         df_trend_individual[df_trend_individual["Team"].isin([t for t in selected_teams if t != "HWK Total"])],
@@ -525,7 +488,6 @@ elif selected_kpi.lower() == "shortage_cost":
         )
 
 else:
-    # 일반 KPI는 주차별 평균
     df_trend_individual = df_filtered.groupby(["Team", "Week_num"]).agg({"Actual_numeric": "mean"}).reset_index()
     fig_line = px.line(
         df_trend_individual[df_trend_individual["Team"].isin([t for t in selected_teams if t != "HWK Total"])],
@@ -552,28 +514,21 @@ st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 
 # --------------------------------------------------
 # 9. [3] KPI Top/Bottom Team Rankings (Top 3 / Bottom 3)
-#    - 전체 주차 범위에 대해 shortage_cost, final score는 합계, 그 외 KPI는 평균
 # --------------------------------------------------
 st.markdown(trans["top_bottom_rankings"][lang])
 
-# 팀별 누적/평균
 df_rank_base = df_filtered.copy()
 if df_rank_base.empty:
     st.warning("Top/Bottom 분석을 위한 데이터가 없습니다.")
 else:
-    # 팀별 KPI 집계
     df_rank_agg = df_rank_base.groupby("Team").apply(lambda x: cumulative_performance(x, selected_kpi)).reset_index(name="cum")
-    # HWK Total 제외
     df_rank_agg = df_rank_agg[df_rank_agg["Team"] != "HWK Total"]
 
-    # KPI별 정렬 ascending/descending
-    kpi_lower = selected_kpi.lower()
     if kpi_lower in ["5 prs validation", "6s_audit", "final score"]:
         df_rank_agg.sort_values("cum", ascending=False, inplace=True)
     elif kpi_lower in ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]:
         df_rank_agg.sort_values("cum", ascending=True, inplace=True)
     else:
-        # 기본적으로 descending
         df_rank_agg.sort_values("cum", ascending=False, inplace=True)
 
     top_n = 3 if len(df_rank_agg) >= 3 else len(df_rank_agg)
@@ -582,11 +537,9 @@ else:
     top_df = df_rank_agg.head(top_n).copy()
     bottom_df = df_rank_agg.tail(bottom_n).copy()
 
-    if kpi_lower in ["final score", "5 prs validation", "6s_audit"]:
-        # top은 내림차순, bottom은 오름차순
+    if kpi_lower in ["5 prs validation", "6s_audit", "final score"]:
         bottom_df = bottom_df.sort_values("cum", ascending=True)
     else:
-        # top은 오름차순, bottom은 내림차순
         bottom_df = bottom_df.sort_values("cum", ascending=False)
 
     col1, col2 = st.columns(2)
@@ -626,9 +579,7 @@ st.markdown("")
 
 # (A) 팀 데이터 준비
 if selected_team_detail == "HWK Total":
-    # HWK Total이면 주차 범위 필터만 적용한 df_cum
     df_cum = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)]
-    # 최신 주만 골라서 요약 (지난주 성과 상세보기용)
     df_team = (
         df_cum[df_cum["Week_num"] == latest_week]
         .groupby("KPI")
@@ -636,13 +587,11 @@ if selected_team_detail == "HWK Total":
         .reset_index()
     )
 else:
-    # 특정 팀
     df_cum = df[
         (df["Team"] == selected_team_detail) &
         (df["Week_num"] >= start_week) &
         (df["Week_num"] <= end_week)
     ]
-    # 최신 주 데이터만 추출
     df_team = df_cum[df_cum["Week_num"] == latest_week].copy()
 
 # (A-1) 마지막 주 성과 상세보기
@@ -657,20 +606,17 @@ if latest_week is not None:
     if df_team.empty:
         st.warning(f"{selected_team_detail} 팀은 최신 주({latest_week}주차)에 데이터가 없습니다.")
     else:
+        kpi_list_for_team = sorted(df_team["KPI"].unique(), key=str.lower)
         cols = st.columns(3)
         i = 0
 
-        kpi_list_for_team = df_team["KPI"].unique()
         for kpi in kpi_list_for_team:
             kpi_lower = kpi.lower()
             kpi_unit = get_kpi_unit(kpi)
 
-            # HWK Total & shortage_cost
             if selected_team_detail == "HWK Total" and kpi_lower == "shortage_cost":
                 df_cum_sc = df_cum[df_cum["KPI"].str.lower() == "shortage_cost"]
                 if not df_cum_sc.empty:
-                    # 구간 평균 or 합?
-                    # shortage_cost는 합을 원하는 경우가 많으나, 여기서는 예시로 mean 사용 가능
                     cum_value = df_cum_sc["Actual_numeric"].mean()
                 else:
                     cum_value = np.nan
@@ -700,12 +646,10 @@ if latest_week is not None:
                 i += 1
                 continue
 
-            # 일반 케이스
             if selected_team_detail != "HWK Total":
                 df_last = df_team[(df_team["Week_num"] == latest_week) & (df_team["KPI"] == kpi)]
                 df_prev = df_cum[(df_cum["Week_num"] == (latest_week - 1)) & (df_cum["KPI"] == kpi)]
             else:
-                # HWK Total이면, df_team에는 마지막 주 평균 / 이전 주도 비슷하게 그룹
                 df_last = df_team[df_team["KPI"] == kpi]
                 df_prev_raw = (
                     df[(df["Week_num"] == (latest_week - 1))]
@@ -744,7 +688,6 @@ if latest_week is not None:
 
                 if delta_actual is not None and delta_final is not None:
                     emoticon = get_trend_emoticon(kpi, delta_actual)
-                    # 예: -7.03%(+0 point)
                     delta_str = f"{emoticon}{format_value_with_unit(delta_actual, kpi_unit)}({delta_final:+d} point)"
                 else:
                     delta_str = "N/A"
@@ -767,10 +710,12 @@ if df_cum.empty:
     st.warning(f"{selected_team_detail} 팀은 선택한 주차 범위({start_week}~{end_week})에 데이터가 없습니다.")
 else:
     df_cum_group = df_cum.groupby("KPI").apply(lambda x: cumulative_performance(x, x["KPI"].iloc[0])).reset_index(name="cum")
+    kpi_list_for_cum = sorted(df_cum_group["KPI"].unique(), key=str.lower)
+
     cols_total = st.columns(3)
     i = 0
 
-    for kpi in df_cum_group["KPI"].unique():
+    for kpi in kpi_list_for_cum:
         kpi_lower = kpi.lower()
         kpi_unit = get_kpi_unit(kpi)
         kpi_display_name = get_kpi_display_name(kpi, lang)
@@ -809,12 +754,10 @@ else:
             i += 1
             continue
 
-        # 일반 케이스
         sub_df = df_cum[df_cum["KPI"] == kpi]
         cum_value = cumulative_performance(sub_df, kpi)
 
-        # 전체 팀 대비 rank 계산
-        if selected_kpi.lower() in ["final score", "5 prs validation"]:
+        if kpi_lower in ["final score", "5 prs validation"]:
             df_rank_base = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)].copy()
         else:
             df_rank_base = df[
@@ -869,12 +812,7 @@ else:
         else:
             rank_str = "N/A"
 
-        # best_value와의 차이(delta) 계산
-        if not sorted_df.empty:
-            best_value = sorted_df.iloc[0]["cum"]
-        else:
-            best_value = None
-
+        best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else None
         if pd.notna(best_value):
             delta_val = cum_value - best_value
         else:
@@ -896,7 +834,7 @@ else:
 
 # --------------------------------------------------
 # 11. Detailed Data Table (행=주차, 열=KPI)
-#     - 첫 행과 마지막 행(평균)에 배경색을 넣어 가독성 강화
+#     - 열타이틀에 줄바꿈, 첫 행(헤더)에 밝은 회색, 마지막 행(평균)에도 밝은 회색
 # --------------------------------------------------
 st.markdown(trans["detailed_data"][lang])
 
@@ -927,7 +865,6 @@ for kpi in kpi_all:
                 week_values[w] = None
                 weekly_finals[w] = None
         else:
-            # HWK Total이면 팀 구분 없이 평균값
             sub_df = df[
                 (df["KPI"].str.lower() == kpi_lower) &
                 (df["Week_num"] == w)
@@ -947,7 +884,6 @@ for kpi in kpi_all:
     valid_finals = [f for f in weekly_finals.values() if f is not None]
     avg_final = sum(valid_finals) / len(valid_finals) if valid_finals else None
 
-    # 주차별 값 포매팅
     for w in all_weeks:
         val = week_values[w]
         final_val = weekly_finals[w]
@@ -962,7 +898,6 @@ for kpi in kpi_all:
             formatted = "N/A"
         row_data[f"Week {int(w)}"] = formatted
 
-    # 평균 행
     if avg_val is not None:
         avg_str = format_value_with_unit(avg_val, kpi_unit)
         if avg_final is not None:
@@ -978,7 +913,6 @@ table_df = pd.DataFrame(data_table)
 index_order = [f"Week {int(w)}" for w in all_weeks] + ["Average"]
 table_df = table_df.reindex(index_order)
 
-# 인덱스(행)명 다국어 변환
 new_index = {}
 for idx in table_df.index:
     if idx.startswith("Week"):
@@ -990,23 +924,57 @@ for idx in table_df.index:
         new_index[idx] = idx
 table_df.rename(index=new_index, inplace=True)
 
-# 열(KPI)명 다국어 변환
 rename_cols = {}
 for col in table_df.columns:
     rename_cols[col] = get_kpi_display_name(col, lang)
+
 table_df.rename(columns=rename_cols, inplace=True)
 
-# 첫 행(실제 첫 주차)과 마지막 행(Average)에 배경색 지정
-def highlight_first_last_row(row):
-    if row.name == table_df.index[0]:
-        # 첫 행
-        return ['background-color: #F9E79F'] * len(row)
-    elif row.name == table_df.index[-1]:
-        # 마지막 행
-        return ['background-color: #F9E79F'] * len(row)
+# ---------------------------
+# (1) 열타이틀(헤더)에 줄바꿈 적용 (예시):
+#     "포장 완료 제품 5족 품질 검증 통과율" -> "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
+#     "6S 어딧 점수" -> "6S 어딧<br>점수"
+#     그 외도 <br>로 적절히 분할
+# ---------------------------
+def multiline_header(col_name: str) -> str:
+    # 여기서는 예시로 몇 개만 줄바꿈 처리
+    # 실제로는 필요에 맞게 더 작성 가능
+    if col_name == "포장 완료 제품 5족 품질 검증 통과율":
+        return "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
+    elif col_name == "6S 어딧 점수":
+        return "6S 어딧<br>점수"
+    elif col_name == "수검 리젝율":
+        return "수검<br>리젝율"
+    elif col_name == "B-grade 발생율":
+        return "B-grade<br>발생율"
+    elif col_name == "결근율":
+        return "결근<br>율"
+    elif col_name == "이슈 개선 소요 시간":
+        return "이슈 개선<br>소요 시간"
+    elif col_name == "부족분 금액":
+        return "부족분<br>금액"
+    elif col_name == "Final score":
+        return "Final<br>score"
+    else:
+        # 혹은 모든 공백마다 줄바꿈 처리 etc. 
+        # 여기서는 예시로 그냥 return
+        return col_name
+
+table_df.columns = [multiline_header(c) for c in table_df.columns]
+
+# **수정**: 열헤더(제목행)에 밝은 회색, 마지막 행(Average)에 밝은 회색
+def highlight_last_row(row):
+    if row.name == table_df.index[-1]:
+        return ['background-color: #D3D3D3'] * len(row)
     else:
         return [''] * len(row)
 
-styled_table = table_df.style.apply(highlight_first_last_row, axis=1)
+styled_table = table_df.style.set_table_styles([
+    # thead th => 열 제목 행(헤더) 배경색
+    {
+        'selector': 'thead th',
+        'props': [('background-color', '#D3D3D3')]
+    }
+], overwrite=False).apply(highlight_last_row, axis=1)
 
 st.markdown(styled_table.to_html(escape=False), unsafe_allow_html=True)
