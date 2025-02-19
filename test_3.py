@@ -10,7 +10,7 @@ import os
 st.set_page_config(page_title="HWK Quality Competition Event", layout="wide")
 
 # 사이드바에 페이지 선택 위젯 추가
-selected_page = st.sidebar.radio("Select Page", ["Assembly Quality", "Other Page"])
+selected_page = st.sidebar.radio("Select Page", ["Assembly Quality Competition KPI", "Other KPI"])
 
 def assembly_quality_page():
     # --------------------------------------------------
