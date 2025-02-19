@@ -120,9 +120,9 @@ W3	Team6	B-grade	0.08%	1
 W3	Team7	B-grade	0.06%	2
 W3	Team1	shortage_cost	$35.43 	1
 W3	Team2	shortage_cost	$35.43 	1
-W3	Team3	shortage_cost	-	5
-W3	Team4	shortage_cost	-	5
-W3	Team5	shortage_cost	-	5
+W3	Team3	shortage_cost	$0.00	5
+W3	Team4	shortage_cost	$0.00	5
+W3	Team5	shortage_cost	$0.00	5
 W3	Team6	shortage_cost	$32.42 	3
 W3	Team7	shortage_cost	$32.42 	3
 W3	Team1	6S_audit	86.694	1
