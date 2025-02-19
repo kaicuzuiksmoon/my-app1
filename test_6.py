@@ -3359,6 +3359,7 @@ for kpi in df_cum_group["KPI"].unique():
         else:
             sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
         # 동률 처리: 표준 경쟁 순위 (동률이면 같은 순위, 다음 순위는 동률 수 만큼 건너뜀)
+        # 동률 처리: 표준 경쟁 순위 (동률이면 같은 순위, 다음 순위는 동률 수 만큼 건너뜀)
         ranks = []
         current_rank = 1
         for i_row, row in sorted_df.iterrows():
@@ -3375,7 +3376,16 @@ for kpi in df_cum_group["KPI"].unique():
             if row["Team"] == selected_team_detail:
                 selected_rank = ranks[i_row]
                 break
-        rank_str = f"Top {selected_rank}" if selected_rank is not None else "N/A"
+        if selected_rank is not None:
+            if selected_rank == 1:
+                rank_str = f'<span style="color:blue;">Top {selected_rank}</span>'
+            elif selected_rank == 7:
+                rank_str = f'<span style="color:red;">Top {selected_rank}</span>'
+            else:
+                rank_str = f"Top {selected_rank}"
+        else:
+            rank_str = "N/A"
+
         if kpi_lower in ["prs validation", "6s_audit", "final score"]:
             best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
             delta = cum_value - best_value
