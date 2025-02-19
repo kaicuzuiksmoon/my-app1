@@ -575,7 +575,7 @@ st.markdown("")
 # (A) 공통 df_cum 생성
 if selected_team_detail == "HWK Total":
     df_cum = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)]
-    # ======== (수정) HWK Total 선택 시 shortage_cost는 합산, 그 외는 평균 ========
+    # ======== 수정: HWK Total 선택 시 shortage_cost는 합산, 그 외는 평균 ========
     df_team = (
         df_cum[df_cum["Week_num"] == latest_week]
         .groupby("KPI")
@@ -768,24 +768,248 @@ else:
         kpi_unit = get_kpi_unit(kpi)
         kpi_display_name = get_kpi_display_name(kpi, lang)
         
-        # --- HWK Total: 2줄 표시 (현재 값, Δ)
+        # --- HWK Total: 2줄 표시 (현재 평균, Δ)
         if selected_team_detail == "HWK Total":
             current_df = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= latest_week) & (df["KPI"].str.lower() == kpi_lower)]
             previous_df = df[(df["Week_num"] >= start_week) & (df["Week_num"] < latest_week) & (df["KPI"].str.lower() == kpi_lower)]
-            
-            # 현재 구간 (start_week ~ latest_week)
             if not current_df.empty:
                 if kpi_lower in ["final score", "5 prs validation"]:
                     current_avg = current_df["Final"].mean()
                 elif kpi_lower == "shortage_cost":
-                    # shortage_cost는 합산
                     current_avg = current_df["Actual_numeric"].sum()
                 else:
                     current_avg = current_df["Actual_numeric"].mean()
             else:
                 current_avg = np.nan
 
-            # 이전 구간 (start_week ~ latest_week-1)
             if not previous_df.empty:
                 if kpi_lower in ["final score", "5 prs validation"]:
-                    previous_avg = previous_df
+                    previous_avg = previous_df["Final"].mean()
+                elif kpi_lower == "shortage_cost":
+                    previous_avg = previous_df["Actual_numeric"].sum()
+                else:
+                    previous_avg = previous_df["Actual_numeric"].mean()
+            else:
+                previous_avg = np.nan
+
+            delta = None
+            if not np.isnan(current_avg) and not np.isnan(previous_avg):
+                delta = current_avg - previous_avg
+
+            emoticon = get_trend_emoticon(kpi, delta)
+            range_comment = get_range_comment(lang, start_week, latest_week)
+            line1 = format_value_with_unit(current_avg, kpi_unit)
+            line2 = ""
+            if delta is not None:
+                line2 = f"{emoticon}{format_value_with_unit(delta, kpi_unit)} {range_comment}"
+            full_text = f"{line1}<br>{line2}" if line2 else line1
+            render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
+            i += 1
+            continue
+        
+        # --- 일반 팀: 3줄 (누적값, 순위, 최적 대비 Δ)
+        sub_df = df_cum[df_cum["KPI"] == kpi]
+        cum_value = cumulative_performance(sub_df, kpi)
+
+        if kpi_lower in ["final score", "5 prs validation"]:
+            df_rank_base = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)].copy()
+        else:
+            df_rank_base = df[
+                (df["KPI"].str.lower() == kpi_lower) &
+                (df["Week_num"] >= start_week) &
+                (df["Week_num"] <= end_week)
+            ]
+        
+        if df_rank_base.empty:
+            line1 = format_value_with_unit(cum_value, kpi_unit)
+            line2 = "N/A"
+            line3 = ""
+            full_text = f"{line1}<br>{line2}<br>{line3}"
+            render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
+            i += 1
+            continue
+
+        team_cum = df_rank_base.groupby("Team").apply(lambda x: cumulative_performance(x, kpi)).reset_index(name="cum")
+        team_cum = team_cum[team_cum["Team"] != "HWK Total"]
+
+        if kpi_lower in ["5 prs validation", "6s_audit", "final score"]:
+            sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
+        elif kpi_lower in ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]:
+            sorted_df = team_cum.sort_values("cum", ascending=True).reset_index(drop=True)
+        else:
+            sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
+
+        ranks = []
+        current_rank = 1
+        for idx2 in range(len(sorted_df)):
+            if idx2 == 0:
+                ranks.append(current_rank)
+            else:
+                if sorted_df.iloc[idx2]["cum"] == sorted_df.iloc[idx2 - 1]["cum"]:
+                    ranks.append(current_rank)
+                else:
+                    current_rank = idx2 + 1
+                    ranks.append(current_rank)
+        selected_rank = None
+        for idx2 in range(len(sorted_df)):
+            if sorted_df.iloc[idx2]["Team"] == selected_team_detail:
+                selected_rank = ranks[idx2]
+                break
+
+        if selected_rank is not None:
+            if selected_rank == 1:
+                line2 = '<span style="color:blue;">Top 1</span>'
+            elif selected_rank == 7:
+                line2 = '<span style="color:red;">Top 7</span>'
+            else:
+                line2 = f"Top {int(selected_rank)}"
+        else:
+            line2 = "N/A"
+
+        best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else None
+        if pd.notna(best_value):
+            delta_val = cum_value - best_value
+        else:
+            delta_val = None
+
+        emoticon = get_trend_emoticon(kpi, delta_val)
+        range_comment = get_range_comment(lang, start_week, end_week)
+
+        line1 = format_value_with_unit(cum_value, kpi_unit)
+        if pd.notna(delta_val):
+            line3 = f"{emoticon}{format_value_with_unit(delta_val, kpi_unit)} {range_comment}"
+        else:
+            line3 = ""
+
+        full_text = f"{line1}<br>{line2}<br>{line3}"
+        render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
+        i += 1
+
+# --------------------------------------------------
+# 11. Detailed Data Table (행=주차, 열=KPI)
+# --------------------------------------------------
+st.markdown(trans["detailed_data"][lang])
+
+kpi_all = sorted(list(set(df["KPI"].unique()) | {"5 prs validation"}), key=str.lower)
+all_weeks = sorted(df["Week_num"].dropna().unique())
+
+data_table = {}
+for kpi in kpi_all:
+    kpi_lower = kpi.lower()
+    kpi_unit = get_kpi_unit(kpi)
+    row_data = {}
+    week_values = {}
+    weekly_finals = {}
+
+    for w in all_weeks:
+        if selected_team_detail != "HWK Total":
+            sub_df = df[
+                (df["KPI"].str.lower() == kpi_lower) &
+                (df["Team"] == selected_team_detail) &
+                (df["Week_num"] == w)
+            ]
+            if not sub_df.empty:
+                val = sub_df["Actual_numeric"].mean()
+                final_val = sub_df["Final"].mean()
+                week_values[w] = val
+                weekly_finals[w] = final_val
+            else:
+                week_values[w] = None
+                weekly_finals[w] = None
+        else:
+            sub_df = df[
+                (df["KPI"].str.lower() == kpi_lower) &
+                (df["Week_num"] == w)
+            ]
+            if not sub_df.empty:
+                if kpi_lower == "shortage_cost":
+                    val = sub_df["Actual_numeric"].sum()
+                else:
+                    val = sub_df["Actual_numeric"].mean()
+                final_val = sub_df["Final"].mean()
+                week_values[w] = val
+                weekly_finals[w] = final_val
+            else:
+                week_values[w] = None
+                weekly_finals[w] = None
+
+    valid_values = [v for v in week_values.values() if v is not None]
+    avg_val = sum(valid_values) / len(valid_values) if valid_values else None
+
+    valid_finals = [f for f in weekly_finals.values() if f is not None]
+    avg_final = sum(valid_finals) / len(valid_finals) if valid_finals else None
+
+    for w in all_weeks:
+        val = week_values[w]
+        final_val = weekly_finals[w]
+        if val is not None and avg_val is not None:
+            color = get_weekly_value_color(kpi, val, avg_val)
+            val_str = format_value_with_unit(val, kpi_unit)
+            if pd.notna(final_val):
+                formatted = f'<span style="color:{color};">{val_str}</span><br>({final_val:.1f} point)'
+            else:
+                formatted = f'<span style="color:{color};">{val_str}</span>'
+        else:
+            formatted = "N/A"
+        row_data[f"Week {int(w)}"] = formatted
+
+    if avg_val is not None:
+        avg_str = format_value_with_unit(avg_val, kpi_unit)
+        if avg_final is not None:
+            row_data["Average"] = f"{avg_str}<br>({avg_final:.1f} point)"
+        else:
+            row_data["Average"] = avg_str
+    else:
+        row_data["Average"] = "N/A"
+
+    data_table[kpi] = row_data
+
+table_df = pd.DataFrame(data_table)
+index_order = [f"Week {int(w)}" for w in all_weeks] + ["Average"]
+table_df = table_df.reindex(index_order)
+
+new_index = {}
+for idx in table_df.index:
+    if idx.startswith("Week"):
+        week_num = idx.split()[1]
+        new_index[idx] = trans["week_col"][lang].format(week=week_num)
+    elif idx == "Average":
+        new_index[idx] = trans["average"][lang]
+    else:
+        new_index[idx] = idx
+table_df.rename(index=new_index, inplace=True)
+
+def multiline_header(col_name: str) -> str:
+    if col_name == "포장 완료 제품 5족 품질 검증 통과율":
+        return "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
+    elif col_name == "6S 어딧 점수":
+        return "6S 어딧<br>점수"
+    elif col_name == "수검 리젝율":
+        return "수검<br>리젝율"
+    elif col_name == "B-grade 발생율":
+        return "B-grade<br>발생율"
+    elif col_name == "결근율":
+        return "결근<br>율"
+    elif col_name == "이슈 개선 소요 시간":
+        return "이슈 개선<br>소요 시간"
+    elif col_name == "부족분 금액":
+        return "부족분<br>금액"
+    else:
+        return "<br>".join(col_name.split())
+
+table_df.columns = [multiline_header(c) for c in table_df.columns]
+
+def highlight_last_row(row):
+    if row.name == table_df.index[-1]:
+        return ['background-color: #D3D3D3'] * len(row)
+    else:
+        return [''] * len(row)
+
+styled_table = table_df.style.set_table_styles([
+    {
+        'selector': 'thead th',
+        'props': [('background-color', '#D3D3D3')]
+    }
+], overwrite=False).apply(highlight_last_row, axis=1)
+
+st.markdown(styled_table.to_html(escape=False), unsafe_allow_html=True)
