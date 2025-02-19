@@ -3194,7 +3194,7 @@ with col2:
 # 10. [4] Team-Specific KPI Detailed View (카드형 레이아웃)
 # --------------------------------------------------
 st.markdown("")
-# (A) Last Week performance Details
+# (A) 해당 팀 데이터 준비
 if selected_team_detail != "HWK Total":
     df_team = df[df["Team"] == selected_team_detail].copy()
 else:
@@ -3203,6 +3203,7 @@ else:
         "Final": "mean",
         "Actual": "first"
     }).reset_index()
+# (A) Last Week performance Details
 if latest_week is not None:
     st.markdown(
         f"<div style='font-size:18px; font-weight:bold;'>{trans['last_week_details'][lang].format(team=selected_team_detail, week=latest_week)}</div>",
@@ -3291,7 +3292,7 @@ for kpi in df_cum_group["KPI"].unique():
     kpi_lower = kpi.lower()
     kpi_unit = get_kpi_unit(kpi)
     kpi_display_name = get_kpi_display_name(kpi, lang)
-    # HWK Total 처리
+    # HWK Total 선택 시
     if selected_team_detail == "HWK Total":
         if kpi_lower == "shortage_cost":
             if latest_week is not None:
@@ -3325,7 +3326,7 @@ for kpi in df_cum_group["KPI"].unique():
         else:
             sub_df = df_cum[df_cum["KPI"] == kpi]
             cum_value = cumulative_performance(sub_df, kpi)
-            # 새로 추가: 1주차부터 최신주차-1까지의 평균 계산
+            # 1주차부터 최신주-1까지의 평균 계산
             if latest_week is not None and latest_week > selected_week_range[0]:
                 df_cum_prev = df[(df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] < latest_week)]
                 prev_avg = cumulative_performance(df_cum_prev[df_cum_prev["KPI"] == kpi], kpi)
@@ -3346,10 +3347,10 @@ for kpi in df_cum_group["KPI"].unique():
             render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
             i += 1
     else:
-        # 개별 팀인 경우: 3줄 표시
+        # 개별 팀 선택 시: 3줄 표기
         sub_df = df_cum[df_cum["KPI"] == kpi]
         cum_value = cumulative_performance(sub_df, kpi)
-        # Ranking 계산: 전체 팀 데이터를 기준으로 selected_team_detail의 순위
+        # Ranking 계산: 전체 팀 데이터를 기준으로 selected_team_detail의 순위(동률 처리)
         team_cum = df[(df["KPI"] == kpi) & (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])].groupby("Team").apply(lambda x: cumulative_performance(x, kpi)).reset_index(name="cum")
         if kpi_lower in ["prs validation", "6s_audit", "final score"]:
             sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
@@ -3357,20 +3358,32 @@ for kpi in df_cum_group["KPI"].unique():
             sorted_df = team_cum.sort_values("cum", ascending=True).reset_index(drop=True)
         else:
             sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
-        rank = None
-        for idx, row in sorted_df.iterrows():
+        # 동률 처리: 표준 경쟁 순위 (동률이면 같은 순위, 다음 순위는 동률 수 만큼 건너뜀)
+        ranks = []
+        current_rank = 1
+        for i_row, row in sorted_df.iterrows():
+            if i_row == 0:
+                ranks.append(current_rank)
+            else:
+                if row["cum"] == sorted_df.iloc[i_row-1]["cum"]:
+                    ranks.append(current_rank)
+                else:
+                    current_rank = i_row + 1
+                    ranks.append(current_rank)
+        selected_rank = None
+        for i_row, row in sorted_df.iterrows():
             if row["Team"] == selected_team_detail:
-                rank = idx + 1
+                selected_rank = ranks[i_row]
                 break
-        rank_str = f"Top {rank}" if rank is not None else "N/A"
+        rank_str = f"Top {selected_rank}" if selected_rank is not None else "N/A"
         if kpi_lower in ["prs validation", "6s_audit", "final score"]:
-            best_value = team_cum["cum"].max() if not team_cum.empty else 0
+            best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
             delta = cum_value - best_value
         elif kpi_lower in ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]:
-            best_value = team_cum["cum"].min() if not team_cum.empty else 0
+            best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
             delta = cum_value - best_value
         else:
-            best_value = team_cum["cum"].max() if not team_cum.empty else 0
+            best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
             delta = cum_value - best_value
         emoticon = get_trend_emoticon(kpi, delta)
         range_comment = get_range_comment(lang, selected_week_range[0], latest_week if latest_week else selected_week_range[1])
