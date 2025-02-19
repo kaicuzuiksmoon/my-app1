@@ -819,7 +819,6 @@
 #     st.title("Other Page")
 #     st.write("Content for the other page goes here.")
 
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -948,19 +947,22 @@ trans = {
 }
 
 # ============================================================
-# 2. 접속 권한 (비밀번호 입력 없으면 앱 화면 미노출)
+# 2. 접속 권한: 비밀번호 입력 없으면 앱 화면 미노출 (st.experimental_rerun() 대신 세션 상태 활용)
 # ============================================================
-if 'password_verified' not in st.session_state:
-    st.session_state['password_verified'] = False
+if "password_verified" not in st.session_state:
+    st.session_state["password_verified"] = False
 
-if not st.session_state['password_verified']:
+if not st.session_state["password_verified"]:
     password = st.sidebar.text_input("Enter Password", type="password")
-    if password == "2025hwkqip":  # 원하는 비밀번호로 변경하세요.
-        st.session_state['password_verified'] = True
-        st.experimental_rerun()
-    else:
-        st.error("Incorrect password!")
+    # 사용자가 입력을 하지 않으면 이후 코드를 실행하지 않음
+    if not password:
         st.stop()
+    else:
+        if password == "1234":  # 원하는 비밀번호로 변경하세요.
+            st.session_state["password_verified"] = True
+        else:
+            st.error("Incorrect password!")
+            st.stop()
 
 # ============================================================
 # 3. 글로벌 언어 선택 (사이드바)
@@ -1167,7 +1169,7 @@ def assembly_quality_page():
             return f"{val:.2f}{unit}"
 
     # ------------------------------
-    # 6. 데이터 로드 및 전처리
+    # 데이터 로드 및 전처리
     # ------------------------------
     df = load_data()
     df["Week"] = (
@@ -1183,7 +1185,7 @@ def assembly_quality_page():
     df["Final"] = pd.to_numeric(df["Final"], errors="coerce")
 
     # ------------------------------
-    # 7. 사이드바 위젯 (필터)
+    # 사이드바 위젯 (필터)
     # ------------------------------
     st.sidebar.header("Filter Options")
     kpi_options = sorted(list(df["KPI"].unique()))
@@ -1218,7 +1220,7 @@ def assembly_quality_page():
     start_week, end_week = sorted(selected_week_range)
 
     # ------------------------------
-    # 8. KPI/주차 범위 필터링
+    # KPI/주차 범위 필터링
     # ------------------------------
     kpi_lower = selected_kpi.lower().strip()
     if kpi_lower == "final score":
@@ -1240,7 +1242,7 @@ def assembly_quality_page():
         latest_week = int(latest_week)
 
     # ------------------------------
-    # 9. [1] KPI Performance Comparison by Team (바 차트)
+    # [1] KPI Performance Comparison by Team (바 차트)
     # ------------------------------
     st.markdown(trans["kpi_comparison"][lang])
     df_bar = df_filtered.groupby("Team").apply(lambda x: aggregator_for_kpi(x, selected_kpi)).reset_index(name="Value")
@@ -1286,7 +1288,7 @@ def assembly_quality_page():
     st.plotly_chart(fig_bar, use_container_width=True, key="bar_chart")
 
     # ------------------------------
-    # 10. [2] Weekly Performance Trend Analysis (라인 차트)
+    # [2] Weekly Performance Trend Analysis (라인 차트)
     # ------------------------------
     st.markdown(trans["weekly_trend"][lang])
     if kpi_lower == "final score":
@@ -1358,7 +1360,7 @@ def assembly_quality_page():
     st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 
     # ------------------------------
-    # 11. [3] KPI Top/Bottom Team Rankings
+    # [3] KPI Top/Bottom Team Rankings
     # ------------------------------
     st.markdown(trans["top_bottom_rankings"][lang])
     df_rank_base = df_filtered.copy()
@@ -1408,7 +1410,7 @@ def assembly_quality_page():
             st.plotly_chart(fig_bottom, use_container_width=True, key="bottom_chart")
 
     # ------------------------------
-    # 12. [4] Team-Specific KPI Detailed View (카드형 레이아웃)
+    # [4] Team-Specific KPI Detailed View (카드형 레이아웃)
     # ------------------------------
     st.markdown("")
     if selected_team_detail == "HWK Total":
@@ -1553,7 +1555,7 @@ def assembly_quality_page():
                 i += 1
 
     # ------------------------------
-    # 13. Detailed Data Table (행=주차, 열=KPI)
+    # [5] Detailed Data Table (행=주차, 열=KPI)
     # ------------------------------
     st.markdown(trans["detailed_data"][lang])
     kpi_all = sorted(list(set(df["KPI"].unique()) | {"5 prs validation"}), key=str.lower)
