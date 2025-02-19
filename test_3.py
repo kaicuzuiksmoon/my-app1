@@ -955,7 +955,7 @@ if 'password_verified' not in st.session_state:
 
 if not st.session_state['password_verified']:
     password = st.sidebar.text_input("Enter Password", type="password")
-    if password == "1234":  # 원하는 비밀번호로 변경하세요.
+    if password == "2025hwkqip":  # 원하는 비밀번호로 변경하세요.
         st.session_state['password_verified'] = True
         st.experimental_rerun()
     else:
