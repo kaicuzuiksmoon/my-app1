@@ -575,15 +575,33 @@ else:
 st.markdown("")
 
 # (A) 공통 df_cum 생성
+# if selected_team_detail == "HWK Total":
+#     df_cum = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)]
+#     # HWK Total -> 집계
+#     df_team = (
+#         df_cum[df_cum["Week_num"] == latest_week]
+#         .groupby("KPI")
+#         .agg({"Actual_numeric": "mean", "Final": "mean", "Actual": "first"})
+#         .reset_index()
+#     )
 if selected_team_detail == "HWK Total":
+    # 주차 범위 필터
     df_cum = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)]
-    # HWK Total -> 집계
+    
+    # latest_week의 데이터만 추려서 KPI별 그룹핑
     df_team = (
         df_cum[df_cum["Week_num"] == latest_week]
         .groupby("KPI")
-        .agg({"Actual_numeric": "mean", "Final": "mean", "Actual": "first"})
+        .apply(lambda g: pd.Series({
+            "Actual_numeric": (
+                g["Actual_numeric"].sum() 
+                if g.name.lower() == "shortage_cost"  # <-- KPI명이 shortage_cost일 경우 합산
+                else g["Actual_numeric"].mean()       # 그 외에는 평균
+            ),
+            "Final": g["Final"].mean(),
+            "Actual": g["Actual"].iloc[0]
+        }))
         .reset_index()
-    )
 else:
     df_cum = df[
         (df["Team"] == selected_team_detail) &
