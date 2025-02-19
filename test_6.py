@@ -235,6 +235,7 @@ def get_weekly_value_color(kpi, weekly_value, avg_value):
     else:
         return "blue" if weekly_value >= avg_value else "red"
 
+# 변경: 실적 개선 시 웃는 얼굴, 악화 시 우는 얼굴(😢)을 반환하도록 수정
 def get_trend_emoticon(kpi, delta):
     if delta is None:
         return ""
@@ -245,21 +246,21 @@ def get_trend_emoticon(kpi, delta):
         if delta > 0:
             return "😀"
         elif delta < 0:
-            return "😡"
+            return "😢"
         else:
             return ""
     elif kpi_lower in negative_better:
         if delta < 0:
             return "😀"
         elif delta > 0:
-            return "😡"
+            return "😢"
         else:
             return ""
     else:
         if delta > 0:
             return "😀"
         elif delta < 0:
-            return "😡"
+            return "😢"
         else:
             return ""
 
@@ -354,7 +355,7 @@ start_week, end_week = sorted(selected_week_range)
 # 6. KPI/주차 범위 필터링
 # --------------------------------------------------
 kpi_lower = selected_kpi.lower()
-# 수정: "final score"만 별도 처리하고, 그 외에는 반드시 KPI 필터 적용
+# "final score"만 별도 처리하고, 그 외에는 반드시 KPI 필터 적용
 if kpi_lower == "final score":
     df_filtered = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)].copy()
 else:
@@ -626,7 +627,7 @@ if latest_week is not None:
                     prev_avg = None
 
                 delta = None
-                if prev_avg is not None and not np.isnan(prev_avg):
+                if prev_avg is not None and not pd.isna(prev_avg):
                     delta = cum_value - prev_avg
                 emoticon = get_trend_emoticon(kpi, delta)
                 range_comment = get_range_comment(lang, start_week, latest_week)
@@ -714,44 +715,41 @@ else:
         kpi_lower = kpi.lower()
         kpi_unit = get_kpi_unit(kpi)
         kpi_display_name = get_kpi_display_name(kpi, lang)
-
-        if selected_team_detail == "HWK Total" and kpi_lower == "shortage_cost":
-            df_cum_sc = df_cum[df_cum["KPI"].str.lower() == "shortage_cost"]
-            if not df_cum_sc.empty:
-                cum_value = df_cum_sc["Actual_numeric"].mean()
+        
+        # HWK Total 선택 시: 로직을 변경하여 (전체 기간 평균 - (전체 기간 중 최신주 제외 평균)) 계산
+        if selected_team_detail == "HWK Total":
+            current_df = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= latest_week) & (df["KPI"].str.lower() == kpi_lower)]
+            previous_df = df[(df["Week_num"] >= start_week) & (df["Week_num"] < latest_week) & (df["KPI"].str.lower() == kpi_lower)]
+            if not current_df.empty:
+                if kpi_lower in ["final score", "5 prs validation"]:
+                    current_avg = current_df["Final"].mean()
+                else:
+                    current_avg = current_df["Actual_numeric"].mean()
             else:
-                cum_value = np.nan
-
-            if latest_week > start_week:
-                df_cum_prev_sc = df[
-                    (df["Week_num"] >= start_week) &
-                    (df["Week_num"] < latest_week) &
-                    (df["KPI"].str.lower() == "shortage_cost")
-                ]
-                prev_avg = df_cum_prev_sc["Actual_numeric"].mean() if not df_cum_prev_sc.empty else np.nan
+                current_avg = np.nan
+            if not previous_df.empty:
+                if kpi_lower in ["final score", "5 prs validation"]:
+                    previous_avg = previous_df["Final"].mean()
+                else:
+                    previous_avg = previous_df["Actual_numeric"].mean()
             else:
-                prev_avg = None
-
-            if prev_avg is not None and not np.isnan(prev_avg):
-                delta = cum_value - prev_avg
-            else:
-                delta = None
-
+                previous_avg = np.nan
+            
+            delta = None
+            if previous_avg is not None and not pd.isna(previous_avg):
+                delta = current_avg - previous_avg
             emoticon = get_trend_emoticon(kpi, delta)
             range_comment = get_range_comment(lang, start_week, latest_week)
-            line1 = format_value_with_unit(cum_value, kpi_unit)
+            line1 = format_value_with_unit(current_avg, kpi_unit)
+            line2 = ""
             if delta is not None:
                 line2 = f"{emoticon}{format_value_with_unit(delta, kpi_unit)} {range_comment}"
-            else:
-                line2 = "N/A"
-            full_text = f"{line1}<br>{line2}"
+            full_text = f"{line1}<br>{line2}" if line2 else line1
             render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
             i += 1
             continue
-
-        sub_df = df_cum[df_cum["KPI"] == kpi]
-        cum_value = cumulative_performance(sub_df, kpi)
-
+        
+        # 개별 팀 선택 시 기존 로직 그대로 3줄 표기
         if kpi_lower in ["final score", "5 prs validation"]:
             df_rank_base = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)].copy()
         else:
@@ -760,7 +758,7 @@ else:
                 (df["Week_num"] >= start_week) &
                 (df["Week_num"] <= end_week)
             ]
-
+        
         if df_rank_base.empty:
             line1 = format_value_with_unit(cum_value, kpi_unit)
             line2 = "N/A"
@@ -769,16 +767,16 @@ else:
             render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
             i += 1
             continue
-
+        
         team_cum = df_rank_base.groupby("Team").apply(lambda x: cumulative_performance(x, kpi)).reset_index(name="cum")
-
+        
         if kpi_lower in ["5 prs validation", "6s_audit", "final score"]:
             sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
         elif kpi_lower in ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]:
             sorted_df = team_cum.sort_values("cum", ascending=True).reset_index(drop=True)
         else:
             sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
-
+        
         ranks = []
         current_rank = 1
         for i_row, row in sorted_df.iterrows():
@@ -790,13 +788,13 @@ else:
                 else:
                     current_rank = i_row + 1
                     ranks.append(current_rank)
-
+        
         selected_rank = None
         for i_row, row in sorted_df.iterrows():
             if row["Team"] == selected_team_detail:
                 selected_rank = ranks[i_row]
                 break
-
+        
         if selected_rank is not None:
             if selected_rank == 1:
                 rank_str = '<span style="color:blue;">Top 1</span>'
@@ -806,23 +804,23 @@ else:
                 rank_str = f"Top {selected_rank}"
         else:
             rank_str = "N/A"
-
+        
         best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else None
         if pd.notna(best_value):
             delta_val = cum_value - best_value
         else:
             delta_val = None
-
+        
         emoticon = get_trend_emoticon(kpi, delta_val)
         range_comment = get_range_comment(lang, start_week, latest_week)
-
+        
         line1 = format_value_with_unit(cum_value, kpi_unit)
         line2 = rank_str
         if pd.notna(delta_val):
             line3 = f"{emoticon}{format_value_with_unit(delta_val, kpi_unit)} {range_comment}"
         else:
             line3 = ""
-
+        
         full_text = f"{line1}<br>{line2}<br>{line3}"
         render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
         i += 1
@@ -922,7 +920,6 @@ for idx in table_df.index:
         new_index[idx] = idx
 table_df.rename(index=new_index, inplace=True)
 
-# 열 타이틀(헤더)에도 KPI명을 변환하는데, 여기서 줄바꿈 처리 적용
 def multiline_header(col_name: str) -> str:
     if col_name == "포장 완료 제품 5족 품질 검증 통과율":
         return "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
@@ -938,14 +935,11 @@ def multiline_header(col_name: str) -> str:
         return "이슈 개선<br>소요 시간"
     elif col_name == "부족분 금액":
         return "부족분<br>금액"
-    # Final score는 제거되었으므로 처리하지 않음.
     else:
-        # 기본적으로 공백 단위로 줄바꿈
         return "<br>".join(col_name.split())
 
 table_df.columns = [multiline_header(c) for c in table_df.columns]
 
-# 열 헤더(제목행)에 밝은 회색, 마지막 행(Average)에 밝은 회색 적용 (단, 데이터 행에 적용하지 않음)
 def highlight_last_row(row):
     if row.name == table_df.index[-1]:
         return ['background-color: #D3D3D3'] * len(row)
