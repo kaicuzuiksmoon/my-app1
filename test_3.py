@@ -177,7 +177,7 @@
 #     # --------------------------------------------------
 #     col_title, col_lang = st.columns([4, 1])
 #     with col_lang:
-#         lang = st.radio("Language / 언어 / ngôn어", options=["en", "ko", "vi"], index=0, horizontal=True)
+#         lang = st.radio("Language / 언어 / ngôn어", options=["English", "한국어", "tiếng Việt"], index=0, horizontal=True)
 #     st.title(trans["title"][lang])
 
 #     # --------------------------------------------------
@@ -967,7 +967,7 @@ if not st.session_state["password_verified"]:
 # ============================================================
 # 3. 글로벌 언어 선택 (사이드바)
 # ============================================================
-lang = st.sidebar.radio("Language / 언어 / ngôn어", options=["en", "ko", "vi"], index=0, horizontal=True)
+lang = st.sidebar.radio("Language / 언어 / ngôn어", options=["English", "한국어", "tiếng Việt"], index=0, horizontal=True)
 
 # ============================================================
 # 4. 페이지 선택 (사이드바)
