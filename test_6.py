@@ -28,8 +28,8 @@ trans = {
         "vi": "Phân tích xu hướng hiệu suất hàng tuần"
     },
     "top_bottom_rankings": {
-        "en": "3. KPI Top/Bottom Team Rankings",
-        "ko": "3. KPI 상위/하위 팀 순위",
+        "en": "KPI Top/Bottom Team Rankings",
+        "ko": "KPI 상위/하위 팀 순위",
         "vi": "Xếp hạng Nhóm KPI Cao/Thấp Nhất"
     },
     "last_week_details": {
@@ -468,15 +468,8 @@ else:
     top_df["Label"] = top_df.apply(make_bar_label2, axis=1)
     bottom_df["Label"] = bottom_df.apply(make_bar_label2, axis=1)
 col1, col2 = st.columns(2)
-# 랭킹 색상 적용 (개별 팀 선택 시)
+# 랭킹 계산 (개별 팀 선택 시) - 동률 처리 후, Top 1은 파란색, Top 7은 빨간색으로 표시
 if selected_team_detail != "HWK Total":
-    # 동률 처리: 표준 경쟁 순위
-    ranks = []
-    current_rank = 1
-    sorted_df = None
-    kpi_lower = selected_kpi.lower()  # 임시, 실제 KPI마다 처리됨
-    # 해당 KPI에 대한 누적 실적을 기준으로 정렬 (KPI의 특성에 따라 오름차순/내림차순 결정)
-    # 여기서는 Detailed Data Table의 누적 값(team_cum)을 사용
     team_cum = df[(df["KPI"] == selected_kpi) & (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])].groupby("Team").apply(lambda x: cumulative_performance(x, selected_kpi)).reset_index(name="cum")
     if selected_kpi.lower() in ["prs validation", "6s_audit", "final score"]:
         sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
@@ -484,6 +477,8 @@ if selected_team_detail != "HWK Total":
         sorted_df = team_cum.sort_values("cum", ascending=True).reset_index(drop=True)
     else:
         sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
+    ranks = []
+    current_rank = 1
     for i_row, row in sorted_df.iterrows():
         if i_row == 0:
             ranks.append(current_rank)
@@ -499,7 +494,6 @@ if selected_team_detail != "HWK Total":
             selected_rank = ranks[i_row]
             break
     if selected_rank is not None:
-        # Top 1은 파란색, Top 7은 빨간색, 그 외는 기본 검정색
         if selected_rank == 1:
             rank_str = '<span style="color:blue;">Top 1</span>'
         elif selected_rank == 7:
@@ -559,9 +553,215 @@ with col2:
     st.plotly_chart(fig_bottom, use_container_width=True, key="bottom_chart")
 
 # --------------------------------------------------
-# 11. Detailed Data Table (행=주차, 열=KPI)
+# 10. [4] Team-Specific KPI Detailed View (카드형 레이아웃)
 # --------------------------------------------------
 st.markdown("")
+# (A) 해당 팀 데이터 준비
+if selected_team_detail != "HWK Total":
+    df_team = df[df["Team"] == selected_team_detail].copy()
+else:
+    df_team = df[df["Week_num"] == latest_week].groupby("KPI").agg({
+        "Actual_numeric": "mean",
+        "Final": "mean",
+        "Actual": "first"
+    }).reset_index()
+# (A) Last Week performance Details
+if latest_week is not None:
+    st.markdown(
+        f"<div style='font-size:18px; font-weight:bold;'>{trans['last_week_details'][lang].format(team=selected_team_detail, week=latest_week)}</div>",
+        unsafe_allow_html=True
+    )
+    cols = st.columns(3)
+    i = 0
+    kpi_list_for_team = df_team["KPI"].unique()
+    for kpi in kpi_list_for_team:
+        kpi_lower = kpi.lower()
+        kpi_unit = get_kpi_unit(kpi)
+        def format_value_with_unit(val, unit):
+            if unit == "%" and not f"{val:.2f}".endswith("%"):
+                return f"{val:.2f}{unit}"
+            return f"{val:.2f}{unit}"
+        if selected_team_detail == "HWK Total" and kpi_lower == "shortage_cost":
+            df_cum_sc = df_cum[df_cum["KPI"].str.lower() == "shortage_cost"]
+            if not df_cum_sc.empty:
+                cum_value = df_cum_sc["Actual_numeric"].mean()
+            else:
+                cum_value = np.nan
+            if latest_week is not None and latest_week > selected_week_range[0]:
+                df_cum_prev_sc = df[(df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] < latest_week) & (df["KPI"].str.lower() == "shortage_cost")]
+                prev_avg = df_cum_prev_sc["Actual_numeric"].mean() if not df_cum_prev_sc.empty else np.nan
+            else:
+                prev_avg = None
+            delta = cum_value - prev_avg if prev_avg is not None else None
+            emoticon = get_trend_emoticon(kpi, delta)
+            range_comment = get_range_comment(lang, selected_week_range[0], latest_week if latest_week else selected_week_range[1])
+            line1 = f"{get_kpi_unit(kpi)}{cum_value:.2f}"
+            if delta is not None:
+                line2 = f"{emoticon}{get_kpi_unit(kpi)}{delta:+.2f} {range_comment}"
+            else:
+                line2 = "N/A"
+            full_text = f"{line1}<br>{line2}"
+            render_custom_metric(cols[i % 3], get_kpi_display_name(kpi, lang), full_text, "")
+            i += 1
+            continue
+        if selected_team_detail != "HWK Total":
+            df_last = df_team[(df_team["Week_num"] == latest_week) & (df_team["KPI"] == kpi)]
+            df_prev = df_team[(df_team["Week_num"] == (latest_week - 1)) & (df_team["KPI"] == kpi)]
+        else:
+            df_last = df_team[df_team["KPI"] == kpi]
+            df_prev_raw = df[df["Week_num"] == (latest_week - 1)].groupby("KPI").agg({
+                "Actual_numeric": "mean",
+                "Final": "mean",
+                "Actual": "first"
+            }).reset_index()
+            df_prev = df_prev_raw[df_prev_raw["KPI"] == kpi]
+        if not df_last.empty:
+            row_last = df_last.iloc[0]
+        else:
+            continue
+        if selected_team_detail != "HWK Total":
+            curr_val_str = format_value_with_unit(row_last["Actual_numeric"], kpi_unit)
+            current_label = f"{curr_val_str} ({int(round(row_last['Final']))} point)"
+        else:
+            curr_val_str = format_value_with_unit(row_last["Actual_numeric"], kpi_unit)
+            current_label = f"{curr_val_str} ({int(round(row_last['Final']))} point)"
+        if not df_prev.empty:
+            row_prev = df_prev.iloc[0]
+            if pd.notna(row_last["Actual_numeric"]) and pd.notna(row_prev["Actual_numeric"]):
+                delta_actual = row_last["Actual_numeric"] - row_prev["Actual_numeric"]
+            else:
+                delta_actual = None
+            if pd.notna(row_last["Final"]) and pd.notna(row_prev["Final"]):
+                delta_final = int(round(row_last["Final"])) - int(round(row_prev["Final"]))
+            else:
+                delta_final = None
+            if delta_actual is not None and delta_final is not None:
+                emoticon = get_trend_emoticon(kpi, delta_actual)
+                delta_str = f"{emoticon}{format_value_with_unit(delta_actual, kpi_unit)}({delta_final:+d} point)"
+            else:
+                delta_str = "N/A"
+        else:
+            delta_str = "N/A"
+        render_custom_metric(cols[i % 3], get_kpi_display_name(kpi, lang), current_label, delta_str)
+        i += 1
+# (B) Total Week Performance Detail
+st.markdown("")
+st.markdown(
+    f"<div style='font-size:18px; font-weight:bold;'>{trans['total_week_details'][lang].format(team=selected_team_detail)}</div>",
+    unsafe_allow_html=True
+)
+if selected_team_detail != "HWK Total":
+    df_cum = df[(df["Team"] == selected_team_detail) & (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])]
+else:
+    df_cum = df[(df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])]
+df_cum_group = df_cum.groupby("KPI").apply(lambda x: cumulative_performance(x, x["KPI"].iloc[0])).reset_index(name="cum")
+cols_total = st.columns(3)
+i = 0
+for kpi in df_cum_group["KPI"].unique():
+    kpi_lower = kpi.lower()
+    kpi_unit = get_kpi_unit(kpi)
+    kpi_display_name = get_kpi_display_name(kpi, lang)
+    if selected_team_detail == "HWK Total":
+        if kpi_lower == "shortage_cost":
+            df_cum_sc = df_cum[df_cum["KPI"].str.lower() == "shortage_cost"]
+            if not df_cum_sc.empty:
+                cum_value = df_cum_sc["Actual_numeric"].mean()
+            else:
+                cum_value = np.nan
+            if latest_week is not None and latest_week > selected_week_range[0]:
+                df_cum_prev_sc = df[(df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] < latest_week) & (df["KPI"].str.lower() == "shortage_cost")]
+                prev_avg = df_cum_prev_sc["Actual_numeric"].mean() if not df_cum_prev_sc.empty else np.nan
+            else:
+                prev_avg = None
+            delta = cum_value - prev_avg if prev_avg is not None else None
+            emoticon = get_trend_emoticon(kpi, delta)
+            range_comment = get_range_comment(lang, selected_week_range[0], latest_week if latest_week else selected_week_range[1])
+            line1 = f"{get_kpi_unit(kpi)}{cum_value:.2f}"
+            if delta is not None:
+                line2 = f"{emoticon}{get_kpi_unit(kpi)}{delta:+.2f} {range_comment}"
+            else:
+                line2 = "N/A"
+            full_text = f"{line1}<br>{line2}"
+            render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
+            i += 1
+        else:
+            sub_df = df_cum[df_cum["KPI"] == kpi]
+            cum_value = cumulative_performance(sub_df, kpi)
+            if latest_week is not None and latest_week > selected_week_range[0]:
+                df_cum_prev = df[(df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] < latest_week)]
+                prev_avg = cumulative_performance(df_cum_prev[df_cum_prev["KPI"] == kpi], kpi)
+            else:
+                prev_avg = None
+            delta = cum_value - prev_avg if prev_avg is not None else None
+            emoticon = get_trend_emoticon(kpi, delta)
+            range_comment = get_range_comment(lang, selected_week_range[0], latest_week if latest_week else selected_week_range[1])
+            line1 = f"{cum_value:.2f}{kpi_unit}"
+            if delta is not None:
+                line2 = f"{emoticon}{delta:+.2f}{kpi_unit} {range_comment}"
+            else:
+                line2 = "N/A"
+            full_text = f"{line1}<br>{line2}"
+            render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
+            i += 1
+    else:
+        sub_df = df_cum[df_cum["KPI"] == kpi]
+        cum_value = cumulative_performance(sub_df, kpi)
+        team_cum = df[(df["KPI"] == kpi) & (df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] <= selected_week_range[1])].groupby("Team").apply(lambda x: cumulative_performance(x, kpi)).reset_index(name="cum")
+        if kpi_lower in ["prs validation", "6s_audit", "final score"]:
+            sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
+        elif kpi_lower in ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]:
+            sorted_df = team_cum.sort_values("cum", ascending=True).reset_index(drop=True)
+        else:
+            sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
+        ranks = []
+        current_rank = 1
+        for i_row, row in sorted_df.iterrows():
+            if i_row == 0:
+                ranks.append(current_rank)
+            else:
+                if row["cum"] == sorted_df.iloc[i_row-1]["cum"]:
+                    ranks.append(current_rank)
+                else:
+                    current_rank = i_row + 1
+                    ranks.append(current_rank)
+        selected_rank = None
+        for i_row, row in sorted_df.iterrows():
+            if row["Team"] == selected_team_detail:
+                selected_rank = ranks[i_row]
+                break
+        if selected_rank is not None:
+            if selected_rank == 1:
+                rank_str = '<span style="color:blue;">Top 1</span>'
+            elif selected_rank == 7:
+                rank_str = '<span style="color:red;">Top 7</span>'
+            else:
+                rank_str = f"Top {selected_rank}"
+        else:
+            rank_str = "N/A"
+        if kpi_lower in ["prs validation", "6s_audit", "final score"]:
+            best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
+            delta = cum_value - best_value
+        elif kpi_lower in ["aql_performance", "b-grade", "attendance", "issue_tracking", "shortage_cost"]:
+            best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
+            delta = cum_value - best_value
+        else:
+            best_value = sorted_df.iloc[0]["cum"] if not sorted_df.empty else 0
+            delta = cum_value - best_value
+        emoticon = get_trend_emoticon(kpi, delta)
+        range_comment = get_range_comment(lang, selected_week_range[0], latest_week if latest_week else selected_week_range[1])
+        line1 = f"{cum_value:.2f}{kpi_unit}"
+        line2 = rank_str
+        if best_value != 0 and pd.notna(delta):
+            line3 = f"{emoticon}{delta:+.2f}{kpi_unit} {range_comment}"
+        else:
+            line3 = ""
+        full_text = f"{line1}<br>{line2}<br>{line3}"
+        render_custom_metric(cols_total[i % 3], kpi_display_name, full_text, "")
+        i += 1
+
+# --------------------------------------------------
+# 11. Detailed Data Table (행=주차, 열=KPI)
+# --------------------------------------------------
 st.markdown(trans["detailed_data"][lang])
 kpi_all = sorted(df["KPI"].unique())
 all_weeks = sorted(df["Week_num"].dropna().unique())
