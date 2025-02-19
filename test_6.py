@@ -238,7 +238,7 @@ def get_weekly_value_color(kpi, weekly_value, avg_value):
         return "blue" if weekly_value >= avg_value else "red"
 
 def get_trend_emoticon(kpi, delta):
-    """실적 개선: 👍, 악화: 😢"""
+    """실적 개선: 👍, 악화: 🥵"""
     if delta is None:
         return ""
     kpi_lower = kpi.lower()
@@ -248,21 +248,21 @@ def get_trend_emoticon(kpi, delta):
         if delta > 0:
             return "👍"
         elif delta < 0:
-            return "😢"
+            return "🥵"
         else:
             return ""
     elif kpi_lower in negative_better:
         if delta < 0:
             return "👍"
         elif delta > 0:
-            return "😢"
+            return "🥵"
         else:
             return ""
     else:
         if delta > 0:
             return "👍"
         elif delta < 0:
-            return "😢"
+            return "🥵"
         else:
             return ""
 
