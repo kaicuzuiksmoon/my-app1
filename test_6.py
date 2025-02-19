@@ -364,10 +364,8 @@ if selected_kpi == "Final score":
 else:
     def make_bar_label(row):
         k_unit = get_kpi_unit(row["KPI"])
-        # 만약 unit이 "%"나 "$"이면 이미 지정된 위치에 맞게 출력되도록 함.
         val = row["Actual_numeric"]
         fin = row["Final"]
-        # 예: prs validation → "93.49%" ; shortage_cost → "$209.18"
         if row["KPI"].lower() == "shortage_cost":
             return f"{k_unit}{val:.2f} ({fin} point)"
         else:
@@ -542,28 +540,31 @@ if latest_week is not None:
     for kpi in kpi_list_for_team:
         kpi_lower = kpi.lower()
         kpi_unit = get_kpi_unit(kpi)
-        # 만약 단위가 "%"이고 값에 "%"가 붙지 않았다면 강제로 붙이기
         def format_value_with_unit(val, unit):
             if unit == "%" and not f"{val:.2f}".endswith("%"):
                 return f"{val:.2f}{unit}"
             return f"{val:.2f}{unit}"
         if selected_team_detail == "HWK Total" and kpi_lower == "shortage_cost":
-            df_last_raw = df[(df["Week_num"] == latest_week) & (df["KPI"].str.lower() == "shortage_cost")]
-            latest_sum = df_last_raw["Actual_numeric"].sum() if not df_last_raw.empty else np.nan
-            # 부족분은 $를 수치 앞에 붙임
-            current_label = f"{get_kpi_unit(kpi)}{latest_sum:.2f} (Week {latest_week} total)"
-            df_prev_raw = df[(df["Week_num"] == (latest_week - 1)) & (df["KPI"].str.lower() == "shortage_cost")]
-            prev_sum = df_prev_raw["Actual_numeric"].sum() if not df_prev_raw.empty else np.nan
-            if pd.notna(latest_sum) and pd.notna(prev_sum):
-                delta_actual = latest_sum - prev_sum
+            df_cum_sc = df_cum[df_cum["KPI"].str.lower() == "shortage_cost"]
+            if not df_cum_sc.empty:
+                cum_value = df_cum_sc["Actual_numeric"].mean()
             else:
-                delta_actual = None
-            emoticon = get_trend_emoticon(kpi, delta_actual)
-            if delta_actual is not None and delta_actual != 0:
-                delta_str = f"{emoticon}{get_kpi_unit(kpi)}{delta_actual:+.2f}"
+                cum_value = np.nan
+            if latest_week is not None and latest_week > selected_week_range[0]:
+                df_cum_prev_sc = df[(df["Week_num"] >= selected_week_range[0]) & (df["Week_num"] < latest_week) & (df["KPI"].str.lower() == "shortage_cost")]
+                prev_avg = df_cum_prev_sc["Actual_numeric"].mean() if not df_cum_prev_sc.empty else np.nan
             else:
-                delta_str = "N/A"
-            render_custom_metric(cols[i % 3], get_kpi_display_name(kpi, lang), current_label, delta_str)
+                prev_avg = None
+            delta = cum_value - prev_avg if prev_avg is not None else None
+            emoticon = get_trend_emoticon(kpi, delta)
+            range_comment = get_range_comment(lang, selected_week_range[0], latest_week if latest_week else selected_week_range[1])
+            line1 = f"{get_kpi_unit(kpi)}{cum_value:.2f}"
+            if delta is not None:
+                line2 = f"{emoticon}{get_kpi_unit(kpi)}{delta:+.2f} {range_comment}"
+            else:
+                line2 = "N/A"
+            full_text = f"{line1}<br>{line2}"
+            render_custom_metric(cols[i % 3], get_kpi_display_name(kpi, lang), full_text, "")
             i += 1
             continue
         if selected_team_detail != "HWK Total":
@@ -676,7 +677,6 @@ for kpi in df_cum_group["KPI"].unique():
             sorted_df = team_cum.sort_values("cum", ascending=True).reset_index(drop=True)
         else:
             sorted_df = team_cum.sort_values("cum", ascending=False).reset_index(drop=True)
-        # 동률 처리: 표준 경쟁 순위 (동률이면 같은 순위, 다음 순위는 동률 수 만큼 건너뜀)
         ranks = []
         current_rank = 1
         for i_row, row in sorted_df.iterrows():
@@ -761,12 +761,12 @@ for kpi in kpi_all:
         final_val = weekly_finals[w]
         if val is not None and avg_val is not None:
             color = get_weekly_value_color(kpi, val, avg_val)
-            formatted = f'<span style="color:{color};">{val:.2f}{kpi_unit}</span><br>({final_val} point)'
+            formatted = f'<span style="color:{color};">{val:.2f}{kpi_unit}</span><br>({final_val:.1f} point)'
         else:
             formatted = "N/A"
         row_data[f"Week {int(w)}"] = formatted
     if avg_val is not None and avg_final is not None:
-         row_data["Average"] = f"{avg_val:.2f}{kpi_unit}<br>({avg_final:.2f} point)"
+         row_data["Average"] = f"{avg_val:.2f}{kpi_unit}<br>({avg_final:.1f} point)"
     else:
          row_data["Average"] = "N/A"
     data_table[kpi] = row_data
