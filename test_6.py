@@ -112,7 +112,7 @@ KPI_UNITS = {
     "b-grade": "%",
     "attendance": "%",
     "issue_tracking": "minutes",
-    "shortage_cost": "$",  # '$'를 숫자 '앞'에 붙이기 위해 이 단위를 사용
+    "shortage_cost": "$",  # $표기는 숫자 앞에 붙임
     "final score": ""
 }
 
@@ -206,10 +206,6 @@ def get_kpi_unit(kpi_name: str) -> str:
     return KPI_UNITS.get(kpi_name.lower(), "")
 
 def aggregator_for_kpi(df_sub: pd.DataFrame, kpi_name: str) -> float:
-    """
-    여러 주차 범위를 선택했을 때, shortage_cost나 final score는 합계, 
-    그 외 KPI는 평균을 구하도록 설정
-    """
     kpi_lower = kpi_name.lower()
     if kpi_lower == "final score":
         return df_sub["Final"].sum()
@@ -288,11 +284,10 @@ def get_range_comment(lang_code, start_week, end_week):
     else:
         return f"(From Week {start_week} to Week {end_week} average compared to)"
 
-# **수정**: $표기를 숫자 앞에 두기 위해 if unit == "$"일 때 "$" + 값 형태로 반환
 def format_value_with_unit(val, unit):
     if pd.isna(val):
         return "N/A"
-    if unit == "$":  # 숫자 앞에 $
+    if unit == "$":  # 숫자 앞에 $ 추가
         return f"${val:.2f}"
     elif unit == "%" and not f"{val:.2f}".endswith("%"):
         return f"{val:.2f}{unit}"
@@ -402,7 +397,6 @@ def make_bar_label(team, val, kpi_name):
     if kpi_name.lower() == "final score":
         return f"{val:.0f} point"
     elif kpi_name.lower() == "shortage_cost":
-        # $표기를 숫자 앞에
         return f"${val:.2f}"
     else:
         if k_unit == "%":
@@ -577,7 +571,6 @@ else:
 # --------------------------------------------------
 st.markdown("")
 
-# (A) 팀 데이터 준비
 if selected_team_detail == "HWK Total":
     df_cum = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)]
     df_team = (
@@ -594,7 +587,6 @@ else:
     ]
     df_team = df_cum[df_cum["Week_num"] == latest_week].copy()
 
-# (A-1) 마지막 주 성과 상세보기
 if latest_week is not None:
     st.markdown(
         f"<div style='font-size:18px; font-weight:bold;'>"
@@ -606,6 +598,7 @@ if latest_week is not None:
     if df_team.empty:
         st.warning(f"{selected_team_detail} 팀은 최신 주({latest_week}주차)에 데이터가 없습니다.")
     else:
+        # KPI 순서를 알파벳 순으로 통일 (두 섹션 동일)
         kpi_list_for_team = sorted(df_team["KPI"].unique(), key=str.lower)
         cols = st.columns(3)
         i = 0
@@ -710,6 +703,7 @@ if df_cum.empty:
     st.warning(f"{selected_team_detail} 팀은 선택한 주차 범위({start_week}~{end_week})에 데이터가 없습니다.")
 else:
     df_cum_group = df_cum.groupby("KPI").apply(lambda x: cumulative_performance(x, x["KPI"].iloc[0])).reset_index(name="cum")
+    # KPI 순서를 알파벳 순 정렬하여 두 섹션 동일
     kpi_list_for_cum = sorted(df_cum_group["KPI"].unique(), key=str.lower)
 
     cols_total = st.columns(3)
@@ -834,11 +828,14 @@ else:
 
 # --------------------------------------------------
 # 11. Detailed Data Table (행=주차, 열=KPI)
-#     - 열타이틀에 줄바꿈, 첫 행(헤더)에 밝은 회색, 마지막 행(평균)에도 밝은 회색
+#     - 열타이틀에 줄바꿈 적용 및 헤더와 마지막 행에 밝은 회색 배경 적용
+#     - 여기서 "Final score" 칼럼은 제외합니다.
 # --------------------------------------------------
 st.markdown(trans["detailed_data"][lang])
 
-kpi_all = sorted(list(set(df["KPI"].unique()) | {"final score", "5 prs validation"}))
+# Final score 칼럼을 제외한 KPI 목록 (5 prs validation은 포함)
+kpi_all = sorted(list(set(df["KPI"].unique()) | {"5 prs validation"}), key=str.lower)
+
 all_weeks = sorted(df["Week_num"].dropna().unique())
 
 data_table = {}
@@ -924,21 +921,8 @@ for idx in table_df.index:
         new_index[idx] = idx
 table_df.rename(index=new_index, inplace=True)
 
-rename_cols = {}
-for col in table_df.columns:
-    rename_cols[col] = get_kpi_display_name(col, lang)
-
-table_df.rename(columns=rename_cols, inplace=True)
-
-# ---------------------------
-# (1) 열타이틀(헤더)에 줄바꿈 적용 (예시):
-#     "포장 완료 제품 5족 품질 검증 통과율" -> "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
-#     "6S 어딧 점수" -> "6S 어딧<br>점수"
-#     그 외도 <br>로 적절히 분할
-# ---------------------------
+# 열 타이틀(헤더)에도 KPI명을 변환하는데, 여기서 줄바꿈 처리 적용
 def multiline_header(col_name: str) -> str:
-    # 여기서는 예시로 몇 개만 줄바꿈 처리
-    # 실제로는 필요에 맞게 더 작성 가능
     if col_name == "포장 완료 제품 5족 품질 검증 통과율":
         return "포장 완료<br>제품 5족<br>품질 검증<br>통과율"
     elif col_name == "6S 어딧 점수":
@@ -953,16 +937,14 @@ def multiline_header(col_name: str) -> str:
         return "이슈 개선<br>소요 시간"
     elif col_name == "부족분 금액":
         return "부족분<br>금액"
-    elif col_name == "Final score":
-        return "Final<br>score"
+    # Final score는 제거되었으므로 처리하지 않음.
     else:
-        # 혹은 모든 공백마다 줄바꿈 처리 etc. 
-        # 여기서는 예시로 그냥 return
-        return col_name
+        # 기본적으로 공백 단위로 줄바꿈
+        return "<br>".join(col_name.split())
 
 table_df.columns = [multiline_header(c) for c in table_df.columns]
 
-# **수정**: 열헤더(제목행)에 밝은 회색, 마지막 행(Average)에 밝은 회색
+# 열 헤더(제목행)에 밝은 회색, 마지막 행(Average)에 밝은 회색 적용 (단, 데이터 행에 적용하지 않음)
 def highlight_last_row(row):
     if row.name == table_df.index[-1]:
         return ['background-color: #D3D3D3'] * len(row)
@@ -970,7 +952,6 @@ def highlight_last_row(row):
         return [''] * len(row)
 
 styled_table = table_df.style.set_table_styles([
-    # thead th => 열 제목 행(헤더) 배경색
     {
         'selector': 'thead th',
         'props': [('background-color', '#D3D3D3')]
