@@ -354,7 +354,8 @@ start_week, end_week = sorted(selected_week_range)
 # 6. KPI/주차 범위 필터링
 # --------------------------------------------------
 kpi_lower = selected_kpi.lower()
-if kpi_lower in ["final score", "5 prs validation"]:
+# 수정: "final score"만 별도 처리하고, 그 외에는 반드시 KPI 필터 적용
+if kpi_lower == "final score":
     df_filtered = df[(df["Week_num"] >= start_week) & (df["Week_num"] <= end_week)].copy()
 else:
     df_filtered = df[
